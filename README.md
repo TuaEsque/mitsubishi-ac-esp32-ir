@@ -1,229 +1,176 @@
 # Office AC automation: ESP32 + IR for a Mitsubishi MSZ-HR35VF
 
-An ESP32 with an IR LED that replaces the remote, driven over Wi-Fi by anything
-on your network (Home Assistant, cron, a script, curl). It can also listen to
-your real remote and help you reverse engineer the signals.
+An ESP32 with an IR LED and an IR receiver, running **ESPHome**. Home Assistant
+discovers it as a device called **Office AC** with a thermostat (climate)
+entity, diagnostics and a restart button. It replaces the remote over IR, and
+the receiver picks up presses on the real remote so Home Assistant's idea of
+the state stays closer to reality.
+
+For parts, wiring and the step-by-step build, see `final-build-guide.md`.
 
 ```
 aircon-ir/
-  platformio.ini            two firmwares: `capture` and `controller`
-  src/capture.cpp           prints what the real remote sends
-  src/controller.cpp        HTTP API that sends IR
-  include/ac_logic.h        request parsing + JSON (PC-testable, no Arduino code)
-  include/config.h          pins and protocol defaults
-  include/secrets.h.example Wi-Fi details (copy to secrets.h)
-  tools/analyse_ir.py       record / decode / diff / forge raw captures (pure Python)
-  tools/host_check.sh       PC-side tests and example generation
-  tools/host/               test + example generator sources
-  examples/                 sample captures from the library's encoders (not a real unit)
-  homeassistant/office_ac.yaml   rest_command + scripts for the HTTP controller
-  esphome/office-ac.yaml    alternative: ESPHome climate entity (not validated)
+  esphome/office-ac.yaml          the firmware (ESPHome config)  <- main path
+  esphome/secrets.yaml.example    Wi-Fi + API key template
+  homeassistant/office_ac.yaml    optional example automation package
+  final-build-guide.md            parts, wiring, build order
+  tools/analyse_ir.py             record / decode / diff / forge raw captures
+  examples/                       sample captures from library encoders (not a real unit)
+  platformio.ini, src/, include/  fallback only: PlatformIO capture + HTTP controller
+  tools/host_check.sh, tools/host/  tests for the fallback firmware
 ```
 
-## 0. Before you build: check the shortcuts
+## How it fits together
 
-1. **Which Mitsubishi is it?** The MSZ-HR35VF is a *Mitsubishi Electric* indoor
-   unit. Mitsubishi Electric (MSZ-/MSY-/MFZ-) and *Mitsubishi Heavy Industries*
-   (SRK/SRC) use different IR protocols. Start with `MITSUBISHI_AC`; the capture
-   step tells you for sure (it may report `MITSUBISHI112` instead).
-2. **IRremoteESP8266 already knows both families.** Capture one press; if the
-   firmware prints `MITSUBISHI_AC`, `MITSUBISHI112`, `MITSUBISHI_HEAVY_88` or
-   `MITSUBISHI_HEAVY_152`, skip step 3. The Python tool is for when the capture
-   says `UNKNOWN`, or when you want to understand the frame.
-3. **IR is not the only way in, and the wired one gives real feedback.** Many
-   Mitsubishi Electric indoor units have a CN105 service port. The
+```
+ Home Assistant  <== native API (encrypted, port 6053) ==>  ESP32 (ESPHome)
+   "Office AC" device                                         |-- GPIO4  -> transistor -> IR LED  --> AC unit
+     climate.office_ac                                        '-- GPIO14 <- TSOP38238  <-- real remote
+     Wi-Fi signal, uptime, status, firmware, restart
+```
+
+ESPHome is a framework where you describe the firmware in YAML and it
+generates and compiles the C++ for you. Its `mitsubishi` climate platform
+already implements the Mitsubishi Electric IR protocol (the 18-byte frame with
+the sum checksum that `tools/analyse_ir.py` decodes), so there is no custom
+firmware code to maintain.
+
+**Why it shows up as a device:** Home Assistant has an entity registry and a
+separate device registry. A device only exists when an integration registers
+one. The ESPHome integration does that for every ESPHome node it adopts, and
+hangs all of the node's entities off it. A `rest_command` or a script (the old
+HTTP approach) is a building block with no device behind it.
+
+## 0. Before you build
+
+1. **Which Mitsubishi?** The MSZ-HR35VF is *Mitsubishi Electric*. ESPHome's
+   `mitsubishi` platform speaks the Mitsubishi Electric protocol. (Mitsubishi
+   Heavy Industries, SRK/SRC, is a different protocol and would need another
+   platform.)
+2. **The wired alternative.** Many Mitsubishi Electric indoor units have a
+   CN105 service port that gives true two-way state. The
    [MitsubishiCN105ESPHome](https://github.com/echavet/MitsubishiCN105ESPHome)
-   project lists the MSZ-HR series among units contributors have tested (the
-   HR35VF itself is not named, so check your unit has the port). The hardware
-   is an ESP32, a 5 V/3.3 V level shifter and a JST PA-pin connector, and you
-   get two-way control and real status in Home Assistant, which IR can never
-   give. That project's README says ESPHome now also ships a native
-   `mitsubishi_cn105` component. Mitsubishi's own Wi-Fi interface (MAC-587IF-E)
-   is the paid, supported option; I did not verify it fits the HR35VF. Look at
-   the unit's service manual before committing to IR.
+   project lists the MSZ-HR series as tested by contributors (the HR35VF itself
+   is not named). It also runs on ESPHome, so you would still get an "Office AC"
+   device. It is not part of this build.
 
 ## 1. Hardware
 
-| Qty | Part | Notes |
-|---|---|---|
-| 1 | ESP32 dev board (e.g. ESP32-DevKitC) | An ESP8266 D1 mini also works (change `platform`/`board` in `platformio.ini`, and the pins). |
-| 1 | 38 kHz IR receiver module (TSOP38238 or VS1838B) | Both Mitsubishi families use a 38 kHz carrier. **Check the datasheet pinout for your exact part.** Only needed for capture. |
-| 1-2 | 940 nm IR LED (e.g. TSAL6200 or a 5 mm 940 nm) | Two LEDs aimed slightly apart give wider coverage. |
-| 1 | NPN transistor (2N2222 / BC337) | An ESP32 pin alone cannot drive an IR LED at useful current. |
-| 1 | ~1 kOhm resistor | Transistor base. |
-| 1 | ~47 Ohm resistor | LED current limit from 5 V (about 70 mA pulsed). 100 Ohm is gentler. |
-| 1 | Breadboard, jumper wires, USB cable and 5 V supply | A small perfboard and case for the final install. |
-| opt | Phone camera | Most phone cameras show an IR LED flashing: a quick "is it transmitting?" test. |
+See `final-build-guide.md` (parts with typical prices, transistor options, wiring).
+The receiver is now a **permanent** part of the build, not just a capture tool:
+mount it facing into the room, where it can see the real remote.
 
-All of it is commodity hobby electronics. I have not priced the parts.
+## 2. Install ESPHome
 
-### Wiring
+Use one of:
 
-```
-Receiver (capture mode):          Transmitter (controller mode):
+- **Home Assistant add-on (easiest).** Settings -> Add-ons (may be labelled
+  Apps in newer versions) -> store -> *ESPHome Device Builder* -> Install ->
+  Start -> *Show in sidebar*.
+- **On your PC.** `pip install esphome`, then work from the `esphome/` folder
+  with the commands below.
 
-  OUT ---- GPIO14                   GPIO4 --[1k]-- base (2N2222)
-  GND ---- GND                                       collector --- LED cathode (-)
-  VCC ---- 3V3                                       emitter   --- GND
-                                    5V --[47R]-- LED anode (+)
-```
+## 3. First flash (USB)
 
-Both can be on the board at once (different pins). Keep the receiver away from
-the LED while capturing, or it will see its own transmissions.
+1. Copy `esphome/secrets.yaml.example` to `secrets.yaml` and fill it in. In the
+   add-on, paste the same keys into *Secrets* (top right of the dashboard).
+   Generate the API key with:
+   `python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"`
+2. Set `room_temperature_entity` at the top of `office-ac.yaml` to a
+   temperature sensor you already have, or leave it (the card then shows no
+   room temperature).
+3. Flash over USB:
+   - Add-on: *New device*, name it `office-ac`, skip the install step, then
+     *Edit* the new device, replace its YAML with `office-ac.yaml`, *Save*,
+     and *Install* -> *Plug into this computer*.
+     That uses Web Serial, which needs Chrome or Edge and the dashboard opened
+     over HTTPS (your DNS HTTPS URL is fine).
+   - PC: `esphome run office-ac.yaml` and choose the serial port.
+   Hold the board's BOOT button if the upload stalls at "Connecting...".
+4. After that, updates go over Wi-Fi (*Install* -> *Wirelessly*, or
+   `esphome run office-ac.yaml --device office-ac.local`).
 
-## 2. Capture your real remote
+## 4. Add it to Home Assistant
+
+Within a minute of the board joining Wi-Fi, Home Assistant shows a *Discovered*
+ESPHome device under Settings -> Devices & services. Click *Configure* and give
+it the same API key. You then have:
+
+| Entity | What it is |
+|---|---|
+| `climate.office_ac` | Mode (off/heat_cool/cool/heat/dry/fan_only), set point 16-31 C in 1 C steps, fan auto/low/medium/high (more with `set_fan_mode`) |
+| Wi-Fi signal, Uptime, Firmware version | Diagnostics (shown under the device's *Diagnostic* section) |
+| Status | Connectivity: is the board online |
+| Restart | Button that reboots the board |
+
+`homeassistant/office_ac.yaml` is an optional package with an example
+"switch off at 19:00 on weekdays" automation. You can also build automations
+in the UI from the device page.
+
+## 5. Commissioning checks
+
+1. **Is the LED transmitting?** Point a phone camera at it and change the mode
+   in Home Assistant; you should see it flash.
+2. **Does the unit respond?** Try Cool / 22 C from about 2 m.
+3. **Is the receiver working?** Uncomment `dump: all` under `remote_receiver`,
+   install, open the logs (*Logs* in the dashboard or `esphome logs
+   office-ac.yaml`) and press a button on the real remote. You should see the
+   frame, and the thermostat card should follow the remote.
+4. **Fan speeds.** Count the speeds on the remote (excluding auto) and set
+   `set_fan_mode` to `3levels`, `4levels` or `quiet_4levels`.
+
+If the unit does not respond at all, the remote may use a different frame.
+Capture it (step 3 above, or the PlatformIO `capture` firmware) and decode it
+with `tools/analyse_ir.py` (section 6).
+
+## 6. Fallback: reverse engineering tools
+
+Only needed if ESPHome's Mitsubishi platform does not drive the unit.
 
 ```bash
 pip install platformio pyserial
-pio run -e capture -t upload
-pio device monitor        # 115200 baud; press a button on the original remote
-```
-
-Each press prints a block like this:
-
-```
-=== #1 t=4000ms
-PROTO MITSUBISHI_AC bits=144 overflow=NO
-STATE 23CB26010020180636C067000000000000B0
-DESC Power: On, Mode: 3 (Cool), Temp: 22C, ...
-RAW,583,3400,1750,450,1300,...
-```
-
-`PROTO` is the library's guess (`UNKNOWN` if it does not recognise the frame),
-`STATE` the decoded bytes, `RAW` the mark/space timings in microseconds.
-
-## 3. Reverse engineer (only if needed)
-
-Record presses with a label saying what you did, **changing one thing at a
-time** (start from a known state such as Cool / 22 / Fan auto, then change only
-the temperature, then only the fan, and so on):
-
-```bash
+pio run -e capture -t upload && pio device monitor     # prints PROTO / STATE / RAW
 python tools/analyse_ir.py record --port /dev/ttyUSB0 --out caps.jsonl
-#   or, without pyserial:  pio device monitor | python tools/analyse_ir.py record --stdin
-python tools/analyse_ir.py decode caps.jsonl           # header, bit timings, length, checksum
-python tools/analyse_ir.py table  caps.jsonl           # which byte columns vary
+python tools/analyse_ir.py decode caps.jsonl           # header, timings, checksum
+python tools/analyse_ir.py table  caps.jsonl           # which bytes vary
 python tools/analyse_ir.py diff   caps.jsonl --ref 0   # exact bits that moved
+python tools/analyse_ir.py selftest                    # no hardware needed
 ```
 
-What you will typically find with these remotes:
-
-- Every press sends the **whole state** (power, mode, temperature, fan, vane),
-  not a single "temp up" command. So you model the full state, which is why the
-  library keeps one state struct and resends it each time.
-- A frame is ~18 bytes, often sent twice, ending in a checksum (Mitsubishi
-  Electric: the sum of the previous bytes, mod 256).
-- Temperature is a small offset field (`degrees - 16`) plus a half-degree bit.
-
-Try it without hardware using the examples (generated by the library's
-encoders, **not** from a real unit):
-
-```bash
-python tools/analyse_ir.py decode examples/mitsubishi_electric_msz.log
-python tools/analyse_ir.py decode examples/mitsubishi_heavy_152.log --invert
-python tools/analyse_ir.py selftest
-```
-
-`decode` compares its bytes with the `STATE` line in the log and prints
-MATCH/MISMATCH, so it is also a quick check that your bit order and polarity
-settings are right.
-
-Forge frames you never captured (recomputes the checksum, prints a C array for
-`IRsend::sendRaw(rawData, n, 38)`):
-
-```bash
-python tools/analyse_ir.py encode --like caps.jsonl:1 \
-    --bytes "23 CB 26 01 00 20 18 0A 36 C0 67 00 00 00 00 00 00 00" --fix-checksum sum8
-```
-
-Or replay a capture verbatim: `python tools/analyse_ir.py emit caps.jsonl --index 3`.
-(A receiver module reads marks a little short and spaces a little long, so the
-timings are good for analysis and usually fine for replay, but the library's
-ideal timings in the controller are better for everyday use.)
-
-## 4. Run the controller
-
-```bash
-cp include/secrets.h.example include/secrets.h     # add Wi-Fi details
-# edit platformio.ini -> build_flags -> -DAC_PROTOCOL=... to match the capture
-pio run -e controller -t upload
-pio device monitor     # prints the IP and http://office-ac.local/
-```
-
-```bash
-curl "http://<esp-ip>/ac?power=on&mode=cool&temp=22&fan=auto"
-curl "http://<esp-ip>/ac?power=off"
-curl "http://<esp-ip>/status"
-```
-
-Parameters (all optional; omitted ones keep their previous value):
-
-| Parameter | Values |
-|---|---|
-| `power` | `on` `off` (also `1`/`0`/`true`/`false`) |
-| `mode` | `auto` `cool` `heat` `dry` `fan` `off`. `off` switches the unit off; any other mode also switches it on unless `power=` is given |
-| `temp` | 16 to 31, rounded to the nearest 0.5 |
-| `fan` | `auto` `min` `low` `medium` `high` `max` |
-| `swingv` | `off` `auto` `highest` `high` `middle` `low` `lowest`. On Mitsubishi Electric, `off` means "the unit chooses the vane position" and `auto` means "vane oscillates" |
-| `key` | only if you set `API_KEY` in `secrets.h` |
-
-A bad value or an unknown parameter returns HTTP 400 and **sends nothing**
-(`mode=colo` is an error, not "auto"). A request with no parameters just
-reports the state. Nothing is transmitted at boot.
-
-## 5. Home Assistant
-
-- **HTTP controller (this firmware):** `homeassistant/office_ac.yaml` is a
-  package with a `rest_command`, "cool" and "off" scripts and an example
-  evening switch-off. These are commands: IR cannot report state back.
-- **ESPHome instead:** `esphome/office-ac.yaml` gives Home Assistant a real
-  "Office AC" climate entity on the same hardware, using ESPHome's built-in
-  `mitsubishi` IR platform. Flash it instead of the PlatformIO controller.
-- **Wired CN105** (section 0) is the option that gives true two-way state.
+Change one setting per press, starting from a known state. Every press sends
+the **whole state** (power, mode, temperature, fan, vane), about 18 bytes
+ending in a checksum (sum of the previous bytes, mod 256); temperature is
+`degrees - 16`. The PlatformIO `controller` firmware (HTTP API on
+`/ac?power=on&mode=cool&temp=22`) is still in `src/` but is no longer the
+recommended path: it does not create a Home Assistant device.
 
 ## Things that will bite you
 
-- **No feedback.** IR is one-way. If someone uses the real remote, your idea of
-  the state is wrong. Treat `/status` as "what I last sent".
-- **`overflow=YES`.** Increase `kCaptureBufferSize` in `src/capture.cpp`.
-- **Nothing captured.** Check the receiver pinout, and that the remote is
-  within about 30 cm, pointed at it.
-- **Press split into two captures.** `kTimeout` in `capture.cpp` must exceed the
-  gap between the repeated frames (15-17 ms).
-- **Range.** If the unit only responds up close, use two LEDs or lower the 47 Ohm
-  resistor (stay within the LED's pulsed-current rating).
-- **Heavy Industries bit polarity.** Those frames use a short space for 1. Use
-  `--invert` in the Python tool to line its bytes up with the library's `STATE`.
-- **Plain HTTP.** Keep the device on your LAN. `API_KEY` only guards against accidents.
+- **State is a best guess.** IR is one-way. The receiver catches remote presses
+  it can see, but not presses aimed away from it, and not the unit changing on
+  its own (timers, power cuts). Treat the climate entity as "what was last
+  sent or seen". Only CN105 gives real state.
+- **Receiver placement.** The remote is aimed at the AC unit, so put the box
+  near the unit with the receiver facing the room. If the card does not follow
+  the remote, move it or angle it.
+- **2.4 GHz Wi-Fi only.** The ESP32 cannot join 5 GHz.
+- **Range.** If the unit only responds up close, use the second LED or check
+  the LED is aimed at the unit's receiver window.
+- **Keep it on your LAN.** The native API is encrypted with your key, but
+  there is no reason to expose the board outside your network.
 
-## Tests
+## Status of this work
 
-```bash
-git clone --depth 1 https://github.com/crankyoldgit/IRremoteESP8266.git
-tools/host_check.sh ./IRremoteESP8266              # request parsing tests
-tools/host_check.sh ./IRremoteESP8266 --examples   # also regenerate examples/
-python tools/analyse_ir.py selftest
-```
-
-## Status of this code
-
-Checked on a PC against IRremoteESP8266 v2.9.0 (master, Aug 2026):
-
-- `tools/analyse_ir.py` decodes every example frame (8 Mitsubishi Electric,
-  4 Heavy 152) to exactly the bytes the library's real encoder started from,
-  and the `selftest`, `encode` round trip and `record --stdin` work.
-- `include/ac_logic.h` passes its test suite (`tools/host/ac_logic_test.cpp`).
-- `src/capture.cpp` and `src/controller.cpp` pass `g++ -fsyntax-only -Wall
-  -Wextra` against the real library headers for all four `AC_PROTOCOL` values,
-  with stand-ins for the Arduino, Wi-Fi and WebServer headers. That caught one
-  typo, but it is not a real build.
-
-**Not done:**
-
-- The firmware has **not been built with PlatformIO or run on an ESP32**. The
-  PlatformIO registry was unreachable where this was written. Expect to fix a
-  small thing or two on the first build.
-- Nothing has been tested against an actual MSZ-HR35VF. Which Mitsubishi frame
-  its remote sends is unconfirmed until you capture it.
-- `esphome/office-ac.yaml` has not been run through ESPHome, and the Home
-  Assistant package has only had its URL template rendered with plain Jinja2.
+- `esphome/office-ac.yaml` passes `esphome config` on **ESPHome 2026.10.1**
+  (latest stable at the time) with no errors or warnings. ESPHome was run from
+  its source with the dependencies validation needs; PyPI was blocked where
+  this was written, so it has **not been compiled** (`esphome compile`) or
+  flashed.
+- Option names were checked against the 2026.10.1 source of the `mitsubishi`
+  and `climate_ir` components, including `receiver_id` (the component decodes
+  received Mitsubishi frames and publishes the new state).
+- Nothing has been tested against an actual MSZ-HR35VF.
+- `homeassistant/office_ac.yaml` has been parsed as YAML but not loaded into
+  Home Assistant.
+- The fallback PlatformIO firmware and Python tools are as described in
+  earlier versions: tools tested on a PC, firmware syntax-checked only.

@@ -1,62 +1,19 @@
-# Home Assistant package for the HTTP controller firmware (src/controller.cpp).
+# Optional Home Assistant package for the ESPHome "Office AC" device.
+#
+# You do NOT need this file to get the device: Home Assistant discovers the
+# ESPHome board on its own (Settings -> Devices & services -> ESPHome). This
+# package only adds an example automation that uses the device's climate entity.
 #
 # Install:
-#   1. Copy this file to /config/packages/office_ac.yaml
-#   2. In configuration.yaml make sure packages are enabled:
+#   1. Copy to /config/packages/office_ac.yaml
+#   2. In configuration.yaml, make sure packages are enabled:
 #        homeassistant:
 #          packages: !include_dir_named packages
-#   3. Replace OFFICE_AC_HOST below with the controller's address. A DHCP
-#      reservation + the IP is more reliable than "office-ac.local" (mDNS does
-#      not resolve from every Home Assistant install).
-#   4. If you set API_KEY in include/secrets.h, add `&key=YOUR_KEY` to both URLs.
-#   5. Check configuration, then reload. Developer tools -> Actions shows
-#      rest_command.office_ac_set and the two scripts.
+#   3. Developer tools -> YAML -> Check configuration, then restart.
 #
-# IR is one-way: Home Assistant cannot see what the unit is actually doing, so
-# these are commands, not a climate entity with a trustworthy state. If you
-# want a proper climate entity, use esphome/office-ac.yaml instead.
+# The entity id below assumes the ESPHome config is unchanged (device name
+# office-ac, climate `name: None`). Check it under the device's page.
 
-rest_command:
-  # Any field you leave out keeps its previous value on the controller.
-  # mode may be auto|cool|heat|dry|fan|off  (mode=off switches the unit off;
-  # any other mode also switches it on unless power is given).
-  office_ac_set:
-    url: >-
-      http://OFFICE_AC_HOST/ac?{% set p = [] %}
-      {%- if power is defined %}{% set p = p + ['power=' ~ power] %}{% endif -%}
-      {%- if mode is defined %}{% set p = p + ['mode=' ~ mode] %}{% endif -%}
-      {%- if temp is defined %}{% set p = p + ['temp=' ~ temp] %}{% endif -%}
-      {%- if fan is defined %}{% set p = p + ['fan=' ~ fan] %}{% endif -%}
-      {%- if swingv is defined %}{% set p = p + ['swingv=' ~ swingv] %}{% endif -%}
-      {{ p | join('&') }}
-    method: get
-    timeout: 10
-
-script:
-  office_ac_cool:
-    alias: Office AC - cool
-    description: Cool to a set point (default 23 C), fan auto.
-    fields:
-      temp:
-        description: Set point in C, 16 to 31
-        example: 23
-    sequence:
-      - action: rest_command.office_ac_set
-        data:
-          mode: cool
-          temp: "{{ temp | default(23) }}"
-          fan: auto
-
-  office_ac_off:
-    alias: Office AC - off
-    sequence:
-      - action: rest_command.office_ac_set
-        data:
-          power: "off"
-
-# Example automation: switch the office AC off at the end of the working day.
-# Adjust or delete. For a temperature-driven rule, trigger on your own
-# temperature sensor and call script.office_ac_cool.
 automation:
   - id: office_ac_off_evening
     alias: Office AC - off at 19:00 on weekdays
@@ -66,5 +23,9 @@ automation:
     conditions:
       - condition: time
         weekday: [mon, tue, wed, thu, fri]
+    # No "only if it is on" condition on purpose: the IR state is a best guess,
+    # and sending "off" to a unit that is already off does no harm.
     actions:
-      - action: script.office_ac_off
+      - action: climate.turn_off
+        target:
+          entity_id: climate.office_ac

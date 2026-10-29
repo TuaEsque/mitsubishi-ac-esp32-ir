@@ -1,26 +1,29 @@
-# ESPHome alternative: the same ESP32 + IR LED hardware, but Home Assistant sees
-# a real "Office AC" climate entity (set point, mode, fan) discovered
-# automatically. Use this INSTEAD of the PlatformIO controller firmware, not as
-# well as it.
+# Office AC: ESPHome firmware for the ESP32 + IR LED + IR receiver.
 #
-# NOT VALIDATED: the workspace this was written in could not install ESPHome,
-# so this file has not been run through `esphome config`. It follows the
-# documented options of ESPHome's `mitsubishi` IR climate platform:
-# https://esphome.io/components/climate/climate_ir.html
+# Home Assistant discovers this as a device called "Office AC" with:
+#   - a climate entity (mode, set point, fan) that sends Mitsubishi Electric IR
+#   - diagnostics: Wi-Fi signal, uptime, online status, firmware version
+#   - a restart button
 #
-# Needs in secrets.yaml (ESPHome's own file):  wifi_ssid, wifi_password,
-# api_key, ota_password
+# Validated with `esphome config` on ESPHome 2026.10.1 (no errors, no warnings).
+# Not yet compiled or flashed, and not yet tested against the MSZ-HR35VF.
 #
-# ESPHome's Mitsubishi platform implements the Mitsubishi Electric remote
-# protocol. If the unit does not respond, capture your real remote with the
-# receiver below (look at the logs while pressing a button) and compare with
-# tools/analyse_ir.py.
+# secrets.yaml (ESPHome's own file, not committed) needs:
+#   wifi_ssid, wifi_password, fallback_ap_password, api_key
+# Generate api_key with:  python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
+
+substitutions:
+  # Any temperature sensor already in Home Assistant. It only feeds the
+  # "current temperature" on the thermostat card. If it does not exist the card
+  # just shows no room temperature; nothing else breaks.
+  room_temperature_entity: sensor.office_temperature
 
 esphome:
   name: office-ac
+  friendly_name: Office AC
 
 esp32:
-  board: esp32dev
+  board: esp32dev        # DOIT ESP32 DevKit V1 (30-pin)
 
 logger:
 
@@ -28,43 +31,81 @@ api:
   encryption:
     key: !secret api_key
 
+# A bare `encryption:` reuses the API key above, so there is no separate OTA
+# password to manage.
 ota:
   - platform: esphome
-    password: !secret ota_password
+    encryption:
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # If the board cannot join Wi-Fi it starts its own hotspot ("Office AC
+  # Fallback") with a page for entering new Wi-Fi details.
+  ap:
+    password: !secret fallback_ap_password
 
-# IR LED through the transistor (see README wiring). Mitsubishi uses 38 kHz.
+captive_portal:
+
+# IR LED stage: GPIO4 -> 470R -> transistor base (see final-build-guide.md).
 remote_transmitter:
+  id: ir_tx
   pin: GPIO4
   carrier_duty_percent: 50%
+  non_blocking: true
 
-# Optional: only needed to capture the real remote's codes into the log.
-# Remove it once the climate entity works.
+# TSOP38238 on GPIO14. Linked to the climate entity below, so presses on the
+# real remote that this receiver sees update the state in Home Assistant.
 remote_receiver:
+  id: ir_rx
   pin:
     number: GPIO14
     inverted: true
     mode:
       input: true
       pullup: true
-  dump: all
+  # While commissioning, uncomment to print every frame the receiver sees.
+  # dump: all
 
-# Optional: show the room temperature on the climate card. Point this at any
-# temperature sensor you already have in Home Assistant.
 sensor:
   - platform: homeassistant
-    id: office_temperature
-    entity_id: sensor.office_temperature
+    id: room_temperature
+    entity_id: ${room_temperature_entity}
+    internal: true
+
+  - platform: wifi_signal
+    name: Wi-Fi signal
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: Uptime
+    entity_category: diagnostic
+
+binary_sensor:
+  - platform: status
+    name: Status
+
+text_sensor:
+  - platform: version
+    name: Firmware version
+
+button:
+  - platform: restart
+    name: Restart
 
 climate:
   - platform: mitsubishi
-    name: "Office AC"
-    sensor: office_temperature
+    # `None` makes this the device's main entity: it is named "Office AC"
+    # and gets the id climate.office_ac.
+    name: None
+    transmitter_id: ir_tx
+    receiver_id: ir_rx
+    sensor: room_temperature
     supports_cool: true
     supports_heat: true
     supports_dry: true
     supports_fan_only: true
-    # set_fan_mode: 4levels   # try this if your remote has four fan speeds
+    # Fan speeds on the remote, excluding auto. Options: 3levels (default),
+    # 4levels, quiet_4levels. Set this to match your remote.
+    set_fan_mode: 3levels

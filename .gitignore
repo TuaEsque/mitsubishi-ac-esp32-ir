@@ -2,3 +2,5 @@
 include/secrets.h
 caps*.jsonl
 __pycache__/
+esphome/secrets.yaml
+esphome/.esphome/
