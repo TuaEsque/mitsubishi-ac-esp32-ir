@@ -1,0 +1,70 @@
+# ESPHome alternative: the same ESP32 + IR LED hardware, but Home Assistant sees
+# a real "Office AC" climate entity (set point, mode, fan) discovered
+# automatically. Use this INSTEAD of the PlatformIO controller firmware, not as
+# well as it.
+#
+# NOT VALIDATED: the workspace this was written in could not install ESPHome,
+# so this file has not been run through `esphome config`. It follows the
+# documented options of ESPHome's `mitsubishi` IR climate platform:
+# https://esphome.io/components/climate/climate_ir.html
+#
+# Needs in secrets.yaml (ESPHome's own file):  wifi_ssid, wifi_password,
+# api_key, ota_password
+#
+# ESPHome's Mitsubishi platform implements the Mitsubishi Electric remote
+# protocol. If the unit does not respond, capture your real remote with the
+# receiver below (look at the logs while pressing a button) and compare with
+# tools/analyse_ir.py.
+
+esphome:
+  name: office-ac
+
+esp32:
+  board: esp32dev
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# IR LED through the transistor (see README wiring). Mitsubishi uses 38 kHz.
+remote_transmitter:
+  pin: GPIO4
+  carrier_duty_percent: 50%
+
+# Optional: only needed to capture the real remote's codes into the log.
+# Remove it once the climate entity works.
+remote_receiver:
+  pin:
+    number: GPIO14
+    inverted: true
+    mode:
+      input: true
+      pullup: true
+  dump: all
+
+# Optional: show the room temperature on the climate card. Point this at any
+# temperature sensor you already have in Home Assistant.
+sensor:
+  - platform: homeassistant
+    id: office_temperature
+    entity_id: sensor.office_temperature
+
+climate:
+  - platform: mitsubishi
+    name: "Office AC"
+    sensor: office_temperature
+    supports_cool: true
+    supports_heat: true
+    supports_dry: true
+    supports_fan_only: true
+    # set_fan_mode: 4levels   # try this if your remote has four fan speeds
