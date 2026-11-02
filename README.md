@@ -7,6 +7,9 @@ the receiver picks up presses on the real remote so Home Assistant's idea of
 the state stays closer to reality.
 
 For parts, wiring and the step-by-step build, see `final-build-guide.md`.
+Diagrams (schematic, wiring, system, build status) are in `docs/diagrams/`.
+
+![System](docs/diagrams/system.svg)
 
 ```
 aircon-ir/
@@ -14,6 +17,8 @@ aircon-ir/
   esphome/secrets.yaml.example    Wi-Fi + API key template
   homeassistant/office_ac.yaml    optional example automation package
   final-build-guide.md            parts, wiring, build order
+  docs/diagrams/                  schematic, wiring, system, build-status (SVG + PNG)
+  tools/diagrams.py               regenerates docs/diagrams (Schemdraw + Graphviz)
   tools/analyse_ir.py             record / decode / diff / forge raw captures
   examples/                       sample captures from library encoders (not a real unit)
   platformio.ini, src/, include/  fallback only: PlatformIO capture + HTTP controller

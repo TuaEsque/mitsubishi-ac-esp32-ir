@@ -8,7 +8,7 @@ This is the current reference for parts, wiring and the build. Superseded files 
 | :---- | :---- |
 | ESP32 boards (2 x DOIT 30-pin) | in hand |
 | Other parts (see *Parts* below) | in hand |
-| Transistor | **still to buy** (needed before the AC can be controlled; the receiver test works without it) |
+| Transistor | multipack with 2N2222s **ordered, not arrived** (the LED stage is built on the breadboard apart from it) |
 | Solder | own reel: Sn-0.7Cu, 2% flux, 1 mm |
 | Tools | own: soldering iron, multimeter, drill, side cutters |
 
@@ -54,14 +54,26 @@ Receiver (permanent: it lets Home Assistant follow presses on the real remote):
 
 - TSOP38238 pin 1 (OUT) to GPIO14, pin 2 to GND, pin 3 to **3V3** (not 5 V: ESP32 pins are not 5 V tolerant). Check the pin order on your part's datasheet before powering.
 
-IR LED stage:
+IR LED stage (as built on the breadboard, 2 Nov 2026):
 
-- **VIN** (about 5 V when USB powered) \-\> two 100 ohm resistors in parallel (about 50 ohm) \-\> LED anode  
-- LED cathode \-\> transistor collector  
+- **VIN** (about 5 V when USB powered) \-\> three 100 ohm resistors in parallel (about 33 ohm) \-\> LED1 anode  
+- LED1 cathode \-\> LED2 anode (two LEDs in series: twice the light for the same current)  
+- LED2 cathode \-\> transistor collector  
 - transistor emitter \-\> GND  
 - GPIO4 \-\> 470 ohm \-\> transistor base
 
-Expected currents: LED about 62 mA (inside its 100 mA continuous / 1 A pulsed rating), base about 5.5 mA.
+Expected currents: LED about 65 mA at VIN 5 V (about 57 mA at 4.7 V), inside the LEDs' 100 mA continuous / 1 A pulsed rating; about 0.05 W per resistor; base about 5.5 mA.
+
+Diagrams (regenerate with `python tools/diagrams.py`):
+
+- `docs/diagrams/schematic.svg`: full circuit, values and currents  
+- `docs/diagrams/wiring.svg`: every wire coloured by net, with breadboard lines A-G and DOIT pin positions  
+- `docs/diagrams/system.svg`: Home Assistant, ESP32, IR and the unit  
+- `docs/diagrams/build-status.svg`: build order and what is done
+
+![Schematic](docs/diagrams/schematic.svg)
+
+![Wiring](docs/diagrams/wiring.svg)
 
 ## Build order
 
