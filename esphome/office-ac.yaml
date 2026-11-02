@@ -5,8 +5,10 @@
 #   - diagnostics: Wi-Fi signal, uptime, online status, firmware version
 #   - a restart button
 #
-# Validated with `esphome config` on ESPHome 2026.10.1 (no errors, no warnings).
-# Not yet compiled or flashed, and not yet tested against the MSZ-HR35VF.
+# Running on the ESP32 since 2026-11-02 (ESPHome 2026.10.1). Tested against the
+# MSZ-HR35VF: the receiver decodes the real remote, and frames sent from Home
+# Assistant are accepted by the unit (direct-drive LED, ~40 cm; transistor
+# stage still to build for full range).
 #
 # secrets.yaml (ESPHome's own file, not committed) needs:
 #   wifi_ssid, wifi_password, fallback_ap_password, api_key
@@ -106,6 +108,10 @@ climate:
     supports_heat: true
     supports_dry: true
     supports_fan_only: true
-    # Fan speeds on the remote, excluding auto. Options: 3levels (default),
-    # 4levels, quiet_4levels. Set this to match your remote.
-    set_fan_mode: 3levels
+    # The remote has speeds 1-4 plus auto. Mapping confirmed on the unit:
+    #   1 = low, 2 = medium, 3 = middle, 4 = high
+    # Note "medium" is BELOW "middle". Use these names in automations.
+    set_fan_mode: 4levels
+    # Let the unit choose the vane angle, as the real remote does. Without this
+    # ESPHome sends a fixed middle position (byte 9 0x58 instead of 0x40).
+    vertical_default: auto

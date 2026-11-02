@@ -98,10 +98,26 @@ it the same API key. You then have:
 
 | Entity | What it is |
 |---|---|
-| `climate.office_ac` | Mode (off/heat_cool/cool/heat/dry/fan_only), set point 16-31 C in 1 C steps, fan auto/low/medium/high (more with `set_fan_mode`) |
+| `climate.office_ac` | Mode (off/heat_cool/cool/heat/dry/fan_only), set point 16-31 C in 1 C steps, fan auto/low/medium/middle/high (`set_fan_mode: 4levels`, see below) |
 | Wi-Fi signal, Uptime, Firmware version | Diagnostics (shown under the device's *Diagnostic* section) |
 | Status | Connectivity: is the board online |
 | Restart | Button that reboots the board |
+
+**Fan speed names.** With `4levels` the remote's speeds map to:
+
+| Remote | Home Assistant |
+|---|---|
+| 1 | low |
+| 2 | medium |
+| 3 | middle |
+| 4 | high |
+| Auto | auto |
+
+"medium" is *below* "middle". Use these names in automations.
+
+**Reboots every 15 minutes before it is added?** That is ESPHome's API
+watchdog (`api: reboot_timeout`, default 15 min), not a fault. It reboots
+when no Home Assistant connects. Adding the device stops it.
 
 `homeassistant/office_ac.yaml` is an optional package with an example
 "switch off at 19:00 on weekdays" automation. You can also build automations
@@ -117,7 +133,14 @@ in the UI from the device page.
    office-ac.yaml`) and press a button on the real remote. You should see the
    frame, and the thermostat card should follow the remote.
 4. **Fan speeds.** Count the speeds on the remote (excluding auto) and set
-   `set_fan_mode` to `3levels`, `4levels` or `quiet_4levels`.
+   `set_fan_mode` to `3levels`, `4levels` or `quiet_4levels`. The MSZ-HR35VF
+   remote has four, so this config uses `4levels`.
+5. **Loopback.** With `dump: all` on, hold the LED a few cm from the receiver
+   and change the mode in Home Assistant. The log shows `sending: 23,CB,...`
+   (what was built) followed by received frames (what the LED emitted). The
+   `Panasonic`/`AEHA` decodes are other decoders guessing; their bytes are the
+   Mitsubishi bytes with the bit order reversed. Comment `dump: all` out again
+   afterwards; it is noisy.
 
 If the unit does not respond at all, the remote may use a different frame.
 Capture it (step 3 above, or the PlatformIO `capture` firmware) and decode it
@@ -161,15 +184,18 @@ recommended path: it does not create a Home Assistant device.
 
 ## Status of this work
 
-- `esphome/office-ac.yaml` passes `esphome config` on **ESPHome 2026.10.1**
-  (latest stable at the time) with no errors or warnings. ESPHome was run from
-  its source with the dependencies validation needs; PyPI was blocked where
-  this was written, so it has **not been compiled** (`esphome compile`) or
-  flashed.
-- Option names were checked against the 2026.10.1 source of the `mitsubishi`
-  and `climate_ir` components, including `receiver_id` (the component decodes
-  received Mitsubishi frames and publishes the new state).
-- Nothing has been tested against an actual MSZ-HR35VF.
+As of 2026-11-02:
+
+- `esphome/office-ac.yaml` is compiled and running on the ESP32 (ESPHome
+  2026.10.1), and "Office AC" is a device in Home Assistant.
+- **Receive proven:** presses on the real remote update `climate.office_ac`.
+- **Transmit proven:** commands from Home Assistant make the MSZ-HR35VF beep
+  and respond. Tested with the LED driven straight from GPIO4 through 100 R
+  (about 20 mA), which only reaches about 40 cm.
+- **Frame check:** ESPHome's frames match the real remote's captures byte for
+  byte except the vertical vane, now aligned with `vertical_default: auto`.
+- **Still to do:** the transistor LED stage for room-wide range, then the
+  perfboard and enclosure.
 - `homeassistant/office_ac.yaml` has been parsed as YAML but not loaded into
   Home Assistant.
 - The fallback PlatformIO firmware and Python tools are as described in
