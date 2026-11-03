@@ -189,18 +189,19 @@ recommended path: it does not create a Home Assistant device.
 
 ## Status of this work
 
-As of 2026-11-02:
+As of 2026-11-03:
 
 - `esphome/office-ac.yaml` is compiled and running on the ESP32 (ESPHome
   2026.10.1), and "Office AC" is a device in Home Assistant.
 - **Receive proven:** presses on the real remote update `climate.office_ac`.
 - **Transmit proven:** commands from Home Assistant make the MSZ-HR35VF beep
-  and respond. Tested with the LED driven straight from GPIO4 through 100 R
-  (about 20 mA), which only reaches about 40 cm.
+  and respond through the transistor LED stage (2N2222A, 2 LEDs in series,
+  about 65 mA). It works from where the box is mounted; maximum range was not
+  measured because the test was limited by the USB lead. The transistor stays
+  cold in use.
 - **Frame check:** ESPHome's frames match the real remote's captures byte for
   byte except the vertical vane, now aligned with `vertical_default: auto`.
-- **Still to do:** the transistor LED stage for room-wide range, then the
-  perfboard and enclosure.
+- **Still to do:** comment out `dump: all`, then the perfboard and enclosure.
 - `homeassistant/office_ac.yaml` has been parsed as YAML but not loaded into
   Home Assistant.
 - The fallback PlatformIO firmware and Python tools are as described in

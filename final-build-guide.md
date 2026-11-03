@@ -8,7 +8,8 @@ This is the current reference for parts, wiring and the build. Superseded files 
 | :---- | :---- |
 | ESP32 boards (2 x DOIT 30-pin) | in hand |
 | Other parts (see *Parts* below) | in hand |
-| Transistor | 2N2222A (from a multipack) **arrived 3 Nov 2026**; pinout confirmed E-B-C by diode test (see below) |
+| Transistor | 2N2222A (from a multipack), pinout confirmed E-B-C by diode test (see below) |
+| LED stage | **Working on the breadboard (3 Nov 2026).** All power-off checks passed (A-B 36 ohm, base resistor 475 ohm, VIN-GND about 1.6 kohm). Loopback frames received; the AC responds from the mounting position; transistor stays cold |
 | Solder | own reel: Sn-0.7Cu, 2% flux, 1 mm |
 | Tools | own: soldering iron, multimeter, drill, side cutters |
 
