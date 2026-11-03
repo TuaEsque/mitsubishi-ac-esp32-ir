@@ -8,7 +8,7 @@ This is the current reference for parts, wiring and the build. Superseded files 
 | :---- | :---- |
 | ESP32 boards (2 x DOIT 30-pin) | in hand |
 | Other parts (see *Parts* below) | in hand |
-| Transistor | multipack with 2N2222s **ordered, not arrived** (the LED stage is built on the breadboard apart from it) |
+| Transistor | 2N2222A (from a multipack) **arrived 3 Nov 2026**; pinout confirmed E-B-C by diode test (see below) |
 | Solder | own reel: Sn-0.7Cu, 2% flux, 1 mm |
 | Tools | own: soldering iron, multimeter, drill, side cutters |
 
@@ -48,6 +48,8 @@ Suggested stores:
 
 Always confirm the pinout with the multimeter diode test before wiring: the base conducts to both other legs at about 0.6-0.7 V and reads open the other way; the emitter is usually the leg that reads slightly higher.
 
+**Confirmed for the parts in hand (3 Nov 2026):** marked "2N 2222 A331" (2N2222A; 331 is a batch/date code). Flat face towards you, legs down, left to right: **E-B-C**. Red on the middle leg read about 0.70 V to the right leg and slightly higher to the left; black on the middle read OL to both. On the breadboard: left leg (E) to line G, middle (B) to line E, right (C) to line D. Use only the 2N2222A parts from the multipack and keep the rest separate.
+
 ## Wiring (DOIT 30-pin board; matches esphome/office-ac.yaml: LED on GPIO4, receiver on GPIO14)
 
 Receiver (permanent: it lets Home Assistant follow presses on the real remote):
@@ -58,9 +60,9 @@ IR LED stage (as built on the breadboard, 2 Nov 2026):
 
 - **VIN** (about 5 V when USB powered) \-\> three 100 ohm resistors in parallel (about 33 ohm) \-\> LED1 anode  
 - LED1 cathode \-\> LED2 anode (two LEDs in series: twice the light for the same current)  
-- LED2 cathode \-\> transistor collector  
-- transistor emitter \-\> GND  
-- GPIO4 \-\> 470 ohm \-\> transistor base
+- LED2 cathode \-\> transistor collector (right leg, flat face towards you)  
+- transistor emitter (left leg) \-\> GND  
+- GPIO4 \-\> 470 ohm \-\> transistor base (middle leg)
 
 Expected currents: LED about 65 mA at VIN 5 V (about 57 mA at 4.7 V), inside the LEDs' 100 mA continuous / 1 A pulsed rating; about 0.05 W per resistor; base about 5.5 mA.
 

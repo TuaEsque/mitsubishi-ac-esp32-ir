@@ -46,7 +46,7 @@ class Circuit:
     gpio_v: float = 3.3
     vbe: float = 0.7
     led_count: int = 2             # in series
-    transistor: str = "2N2222"
+    transistor: str = "2N2222A"
 
     @property
     def led_r_total(self) -> float:
@@ -187,7 +187,8 @@ def build_schematic(out_dir: Path) -> list[Path]:
         "  Pin order 1 OUT, 2 GND, 3 VS (dome facing you, legs down, left to right).\n"
         "• GPIO14 is configured inverted with the internal pull-up (office-ac.yaml).\n"
         "• All grounds are common. LED long leg (+) towards VIN.\n"
-        "• Confirm Q1 leg order (E-B-C) with the multimeter diode test before fitting.\n"
+        "• Q1 2N2222A: flat face towards you, legs down, left to right E-B-C\n"
+        "  (confirmed by diode test, 3 Nov 2026: base→C ≈ 0.70 V, B→E slightly higher).\n"
         f"• Currents assume VIN {c.supply_v:g} V, Vf {c.led_vf:g} V per LED; "
         f"at VIN 4.7 V expect ≈ {c.led_ma_at(4.7):.0f} mA.\n"
         "• Range step-up if needed: 15 Ω LED resistor, 220 Ω base, 100–470 µF across VIN–GND."
@@ -324,8 +325,9 @@ def build_wiring(out_dir: Path) -> list[Path]:
     g.node("rb", _part(f"Rb {_fmt_ohm(c.base_r_ohm)}", [("a", "end"), ("b", "end")]))
     g.node("led1", _part("LED1 940 nm", [("p", "+ long leg"), ("n", "− short leg")]))
     g.node("led2", _part("LED2 940 nm", [("p", "+ long leg"), ("n", "− short leg")]))
-    g.node("q1", _part(f"Q1 {c.transistor} (NPN)",
-                       [("c", "C  collector"), ("b", "B  base"), ("e", "E  emitter")]))
+    g.node("q1", _part(f"Q1 {c.transistor} (NPN, flat face towards you)",
+                       [("c", "C  collector (right leg)"), ("b", "B  base (middle leg)"),
+                        ("e", "E  emitter (left leg)")]))
 
     def wire(a: str, b: str, net: str, line: str = "", **attrs: str) -> None:
         colour = NET_COLOURS[net]
@@ -357,7 +359,7 @@ def build_wiring(out_dir: Path) -> list[Path]:
                              " 100 Ω = two)\n"
                              "• no continuity VIN–GND or 3V3–GND\n"
                              "• D4 goes only to Rb\n"
-                             "• Q1 legs match lines D / E / G (diode test)\n"
+                             "• Q1 E-B-C left to right: left → G, middle → E, right → D\n"
                              "• both LEDs: long leg towards VIN")
     g.edge("esp", "pins", style="invis")
     g.edge("q1", "checks", style="invis")
@@ -373,8 +375,8 @@ BUILD_STEPS = [
     ("direct", "Direct-drive LED test\nAC responds at ~40 cm", "done"),
     ("cleanup", "Old rest_command package\nremoved from HA", "done"),
     ("breadboard", "LED stage on breadboard\n(3 × 100 Ω, 2 LEDs, Rb)", "done"),
-    ("transistor", "2N2222 arrives:\ndiode-test leg order", "next"),
-    ("fit", "Fit Q1, recheck 33 Ω,\nloopback test", "todo"),
+    ("transistor", "2N2222A arrived:\nE-B-C confirmed (diode test)", "done"),
+    ("fit", "Fit Q1, recheck 33 Ω,\nloopback test", "next"),
     ("range", "Range test at the AC\n(goal: the whole room)", "todo"),
     ("stepup", "Step-up if short:\n15 Ω, 220 Ω base, bulk cap", "optional"),
     ("dump", "Comment out dump: all,\ninstall wirelessly", "todo"),
@@ -392,7 +394,7 @@ STATUS_STYLE = {
 
 def build_status(out_dir: Path) -> list[Path]:
     g = _new_graph("build-status", rankdir="TB")
-    g.attr(label="Build order (status 2 Nov 2026)", labelloc="t", fontsize="16")
+    g.attr(label="Build order (status 3 Nov 2026)", labelloc="t", fontsize="16")
 
     ids = [step_id for step_id, _, status in BUILD_STEPS if status != "optional"]
     for step_id, text, status in BUILD_STEPS:
