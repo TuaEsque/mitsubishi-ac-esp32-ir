@@ -7,7 +7,7 @@ the receiver picks up presses on the real remote so Home Assistant's idea of
 the state stays closer to reality.
 
 For parts, wiring and the step-by-step build, see `final-build-guide.md`.
-Diagrams (schematic, wiring, system, build status) are in `docs/diagrams/`.
+Diagrams (schematic, wiring, system, build status, perfboard layout) are in `docs/diagrams/`.
 
 ![System](docs/diagrams/system.svg)
 
@@ -17,8 +17,9 @@ aircon-ir/
   esphome/secrets.yaml.example    Wi-Fi + API key template
   homeassistant/office_ac.yaml    optional example automation package
   final-build-guide.md            parts, wiring, build order
-  docs/diagrams/                  schematic, wiring, system, build-status (SVG + PNG)
+  docs/diagrams/                  schematic, wiring, system, build-status, perfboard (SVG + PNG)
   tools/diagrams.py               regenerates docs/diagrams (Schemdraw + Graphviz)
+  tools/perfboard.py              perfboard layout data + netlist check (used by diagrams.py)
   tools/analyse_ir.py             record / decode / diff / forge raw captures
   examples/                       sample captures from library encoders (not a real unit)
   platformio.ini, src/, include/  fallback only: PlatformIO capture + HTTP controller
@@ -201,7 +202,8 @@ As of 2026-11-03:
   cold in use.
 - **Frame check:** ESPHome's frames match the real remote's captures byte for
   byte except the vertical vane, now aligned with `vertical_default: auto`.
-- **Still to do:** comment out `dump: all`, then the perfboard and enclosure.
+- **Still to do:** solder the perfboard (layout in `final-build-guide.md`), then the
+  enclosure. `dump: all` is commented out on the board.
 - `homeassistant/office_ac.yaml` has been parsed as YAML but not loaded into
   Home Assistant.
 - The fallback PlatformIO firmware and Python tools are as described in

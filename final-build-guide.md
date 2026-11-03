@@ -72,11 +72,57 @@ Diagrams (regenerate with `python tools/diagrams.py`):
 - `docs/diagrams/schematic.svg`: full circuit, values and currents  
 - `docs/diagrams/wiring.svg`: every wire coloured by net, with breadboard lines A-G and DOIT pin positions  
 - `docs/diagrams/system.svg`: Home Assistant, ESP32, IR and the unit  
-- `docs/diagrams/build-status.svg`: build order and what is done
+- `docs/diagrams/build-status.svg`: build order and what is done  
+- `docs/diagrams/perfboard.svg`: hole-by-hole board layout, component and solder sides (see below)
 
 ![Schematic](docs/diagrams/schematic.svg)
 
 ![Wiring](docs/diagrams/wiring.svg)
+
+## Perfboard layout (one board, drawn 3 Nov 2026)
+
+![Perfboard layout](docs/diagrams/perfboard.svg)
+
+Holes are named by column A-R (across the 5 cm side) and row 1-24 (along the 7 cm side), with row 1 at the USB end. On the component side, with the USB end towards you, column A is on the left. **When you turn the board over to solder, left and right swap**, so work from the solder-side view. The layout lives in `tools/perfboard.py`; it rebuilds the circuit from the hole positions and refuses to draw if any net differs from the schematic.
+
+Why this arrangement: the ESP32 sits in the bottom-left corner so the USB socket reaches the board edge and everything else shares one 7-column strip (L-R). Nothing goes under the ESP32 on the component side, and its Wi-Fi antenna end is clear (it overhangs if you cut the board at row 17, which is good for Wi-Fi). The receiver is on a flying lead, so the box only has to face the LEDs at the AC; the receiver can poke out of any hole facing the room.
+
+**Where the parts go (component side)**
+
+| Part | Holes | Notes |
+| :---- | :---- | :---- |
+| ESP32 sockets | A1-A15 (VIN row), K1-K15 (3V3 row) | 10-pin + 5-pin strips end to end; row 1 is the USB end |
+| R1, R2, R3 (100 ohm) | M11-Q11, M13-Q13, M15-Q15 | Lying flat, 4 holes apart |
+| R4 (470 ohm) | L5-P5 | Lying flat. Column L must stay low: the ESP32 board overhangs it |
+| Q1 2N2222A | E O3, B P3, C Q3 | Flat face towards the USB end (the way you diode-tested it: E-B-C left to right) |
+| LED2 | + R8, - R7 | Long leg (+) in the upper hole. Bend 90 degrees so it points out over the right edge |
+| LED1 | + R11, - R10 | As LED2; angle the two about 10 degrees apart |
+| Receiver lead (J1) | VS L1, GND M2, OUT M4 | Three F-F jumpers cut to length; the TSOP38238 plugs into the female ends (dome facing you: OUT, GND, VS) |
+
+**Solder-side wiring**
+
+| Net | Bare wire, soldered at each pad (part legs or resistor offcuts) | Insulated wire |
+| :---- | :---- | :---- |
+| VIN | A1-B1; M11-M15 (bus for R1-R3) | W1: B1 to M12 |
+| LED+ | R11-Q11-Q15 (bus for R1-R3) | |
+| LED1- to LED2+ | R8-R9-R10 | |
+| Collector | Q3-R3-R7 | |
+| Base | P3-P4-P5 | |
+| GPIO4 | K5-L5 | |
+| GND | K2-L2-O2-O3 | |
+| 3V3 | K1-L1 | |
+| GPIO14 | A5-B5; M4-N4 | W2: B5 to N4 |
+
+**Order of work**
+
+1. **Dry-fit.** Plug the sockets onto the ESP32 and sit it on the board in A1-A15 / K1-K15 with the USB end at row 1. Check the USB plug clears the edge. If you want it smaller, cut along row 17 (score both sides with a knife and snap, or use a hacksaw). Do this outside or over a damp cloth, because glass-fibre dust is an irritant. That leaves about 50 x 43 mm.
+2. **Sockets.** With the ESP32 still plugged in to hold the spacing, solder the end pins of each strip. Check the strips sit flat and straight, then remove the ESP32 and solder the rest.
+3. **Low parts first.** Fit R4 and R1-R3, then Q1 (leave about 5 mm of leg, and heat each leg for 2-3 s at most), then the LEDs. Before trimming any leg, check whether it can be bent along the underside to form its own trace, for example R3's legs along columns M and Q make most of the two resistor buses.
+4. **Bare traces**, using leg offcuts, then the insulated links W1 and W2 last. Lay them flat and strip about 3 mm at each end.
+5. **Receiver lead.** Cut three F-F jumpers to about 10-15 cm, strip and tin the cut ends, and solder them to L1 (VS), M2 (GND) and M4 (OUT). Use colours that make the pin order obvious.
+6. **Checks with the ESP32 out of its sockets and no power.** Resistance M12-Q12 is about 33 ohm, and L5-P5 is about 470 ohm. Continuity A1-M12 (VIN), K2-O3 (GND), A5-M4 (GPIO14) and K1-L1 (3V3) should beep. Neighbouring pads on different nets must not beep: K1-K2, L1-L2, A1-A2 and every pair of adjacent socket pins. In diode mode, red on P3 reads about 0.7 V to O3 and Q3, red on R8 reads about 0.97 V to R7, and red on R11 reads the same to R10. Then plug the ESP32 in, power up and repeat the loopback test.
+
+**Enclosure size.** The board plus the ESP32 in sockets stands about 25 mm tall including the solder joints underneath. The LEDs stick out about 10 mm past the right edge, and the ESP32's antenna end overhangs row 16 by a few millimetres. An inside space of about 65 x 55 x 30 mm is enough. Put the LED holes in the wall the right-hand edge faces, add a small hole facing the room for the receiver, and cut a USB slot at the row-1 end.
 
 ## Build order
 
@@ -86,8 +132,8 @@ Diagrams (regenerate with `python tools/diagrams.py`):
 4. Add the device in Home Assistant: Settings -> Devices & services -> *Discovered* ESPHome -> *Configure*, with the same API key. Press a button on the real remote: the Office AC thermostat card should follow it.
 5. **LED stage** (once the transistor arrives): build it on the second mini breadboard, check the LED flashes on a phone camera when you change the mode in Home Assistant, then test Cool / 22 C on the unit from about 2 m.
 6. Set `set_fan_mode` to match the number of fan speeds on the remote, comment `dump: all` out again, and install wirelessly.
-7. Solder to the proto PCB: female headers (10-pin + 5-pin end to end, two rows) so the ESP32 plugs in. Plug the sockets onto the ESP32's pins first to hold the spacing while soldering.
-8. Enclosure: drill about 5 mm holes in the wall facing the AC unit for two LEDs angled slightly apart, and one about 5 mm hole facing into the room for the receiver. Cut a slot for the USB cable and mount the board in the lid's 1.6 mm PCB guides (or stick-on pads).
+7. Solder to the proto PCB: follow *Perfboard layout* above.
+8. Enclosure: drill about 5 mm holes in the wall facing the AC unit for the two LEDs (the board's right-hand edge sits against it), and one about 5 mm hole facing into the room for the receiver on its lead. Cut a slot for the USB cable at the row-1 end and mount the board on stick-on pads or the box's PCB guides.
 9. Give the board a DHCP reservation. Home Assistant finds it by name, but a fixed address makes troubleshooting easier.
 
 ## First-build things to watch

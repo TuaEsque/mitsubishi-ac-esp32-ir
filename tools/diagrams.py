@@ -7,10 +7,12 @@ Outputs (SVG + PNG) go to docs/diagrams/:
   wiring         Graphviz: point-to-point wiring, coloured by net, with the
                  breadboard line letters (A-G) used in the build notes
   build-status   Graphviz: build order, coloured by what is done / pending
+  perfboard      Matplotlib: hole-by-hole board layout, component and solder
+                 sides, checked against the schematic nets (tools/perfboard.py)
 
 Usage:
   pip install schemdraw graphviz      # plus the Graphviz `dot` binary
-  python tools/diagrams.py            # writes all four
+  python tools/diagrams.py            # writes all five
   python tools/diagrams.py --only schematic wiring
 
 The circuit values live in CIRCUIT below, so a change (e.g. the 15 ohm
@@ -28,6 +30,8 @@ from pathlib import Path
 import graphviz
 import schemdraw
 import schemdraw.elements as elm
+
+import perfboard  # sibling module in tools/
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = REPO_ROOT / "docs" / "diagrams"
@@ -379,9 +383,9 @@ BUILD_STEPS = [
     ("fit", "Fit Q1, power-off checks,\nloopback test", "done"),
     ("range", "Works from mounting position\n(test limited by USB lead)", "done"),
     ("stepup", "Step-up if short:\n15 Ω, 220 Ω base, bulk cap", "optional"),
-    ("dump", "Comment out dump: all,\ninstall wirelessly", "next"),
-    ("layout", "Perfboard layout\n(leg order, row spacing, USB end)", "todo"),
-    ("solder", "Solder: headers first,\ncontinuity checks", "todo"),
+    ("dump", "Comment out dump: all,\ninstall wirelessly", "done"),
+    ("layout", "Perfboard layout drawn\n(docs/diagrams/perfboard)", "done"),
+    ("solder", "Solder: sockets, low parts,\ntraces, links; checks", "next"),
     ("box", "Enclosure: 2 LED holes → AC,\nreceiver hole → room, USB slot", "todo"),
 ]
 STATUS_STYLE = {
@@ -394,7 +398,7 @@ STATUS_STYLE = {
 
 def build_status(out_dir: Path) -> list[Path]:
     g = _new_graph("build-status", rankdir="TB")
-    g.attr(label="Build order (status 3 Nov 2026)", labelloc="t", fontsize="16")
+    g.attr(label="Build order (status 3 Nov 2026, evening)", labelloc="t", fontsize="16")
 
     ids = [step_id for step_id, _, status in BUILD_STEPS if status != "optional"]
     for step_id, text, status in BUILD_STEPS:
@@ -411,11 +415,16 @@ def build_status(out_dir: Path) -> list[Path]:
     return _save_graphviz(g, out_dir / "build-status")
 
 
+def build_perfboard(out_dir: Path) -> list[Path]:
+    return perfboard.build(out_dir, NET_COLOURS)
+
+
 BUILDERS = {
     "schematic": build_schematic,
     "system": build_system,
     "wiring": build_wiring,
     "build-status": build_status,
+    "perfboard": build_perfboard,
 }
 
 
