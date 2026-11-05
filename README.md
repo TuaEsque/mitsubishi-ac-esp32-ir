@@ -190,7 +190,7 @@ recommended path: it does not create a Home Assistant device.
 
 ## Status of this work
 
-As of 2026-11-03:
+As of 2026-11-05: **built and commissioned.** Only the enclosure is left.
 
 - `esphome/office-ac.yaml` is compiled and running on the ESP32 (ESPHome
   2026.10.1), and "Office AC" is a device in Home Assistant.
@@ -202,8 +202,13 @@ As of 2026-11-03:
   cold in use.
 - **Frame check:** ESPHome's frames match the real remote's captures byte for
   byte except the vertical vane, now aligned with `vertical_default: auto`.
-- **Still to do:** solder the perfboard (layout in `final-build-guide.md`), then the
-  enclosure. `dump: all` is commented out on the board.
+- **Soldered:** everything is on one perfboard (layout in
+  `final-build-guide.md`), with the ESP32 in sockets. After soldering, Home
+  Assistant control works, the receiver follows the real remote from where it is
+  normally used, and the physical remote still controls the unit directly.
+  `dump: all` is commented out on the board.
+- **Still to do:** the enclosure, planned as a 3D-printed box (separate
+  project). Size and hole positions are in `final-build-guide.md`.
 - `homeassistant/office_ac.yaml` has been parsed as YAML but not loaded into
   Home Assistant.
 - The fallback PlatformIO firmware and Python tools are as described in

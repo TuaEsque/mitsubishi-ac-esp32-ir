@@ -385,8 +385,9 @@ BUILD_STEPS = [
     ("stepup", "Step-up if short:\n15 Ω, 220 Ω base, bulk cap", "optional"),
     ("dump", "Comment out dump: all,\ninstall wirelessly", "done"),
     ("layout", "Perfboard layout drawn\n(docs/diagrams/perfboard)", "done"),
-    ("solder", "Solder: sockets, low parts,\ntraces, links; checks", "next"),
-    ("box", "Enclosure: 2 LED holes → AC,\nreceiver hole → room, USB slot", "todo"),
+    ("solder", "Soldered on perfboard,\nESP32 in sockets, powered", "done"),
+    ("commission", "Commissioned: HA control,\nreceiver follows remote,\nphysical remote still works", "done"),
+    ("box", "Enclosure (3D-printed):\n2 LED holes → AC, receiver\nhole → room, USB slot", "next"),
 ]
 STATUS_STYLE = {
     "done": {"fillcolor": "#c8e6c9", "color": "#2e7d32"},
@@ -398,7 +399,7 @@ STATUS_STYLE = {
 
 def build_status(out_dir: Path) -> list[Path]:
     g = _new_graph("build-status", rankdir="TB")
-    g.attr(label="Build order (status 3 Nov 2026, evening)", labelloc="t", fontsize="16")
+    g.attr(label="Build order (status 5 Nov 2026)", labelloc="t", fontsize="16")
 
     ids = [step_id for step_id, _, status in BUILD_STEPS if status != "optional"]
     for step_id, text, status in BUILD_STEPS:

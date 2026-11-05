@@ -10,6 +10,8 @@ This is the current reference for parts, wiring and the build. Superseded files 
 | Other parts (see *Parts* below) | in hand |
 | Transistor | 2N2222A (from a multipack), pinout confirmed E-B-C by diode test (see below) |
 | LED stage | **Working on the breadboard (3 Nov 2026).** All power-off checks passed (A-B 36 ohm, base resistor 475 ohm, VIN-GND about 1.6 kohm). Loopback frames received; the AC responds from the mounting position; transistor stays cold |
+| Perfboard | **Soldered and commissioned (5 Nov 2026).** ESP32 in its sockets, Home Assistant controls the AC, receiver follows the real remote, physical remote still works |
+| Enclosure | To do: planned as a 3D-printed box (see *Enclosure size* below) |
 | Solder | own reel: Sn-0.7Cu, 2% flux, 1 mm |
 | Tools | own: soldering iron, multimeter, drill, side cutters |
 
