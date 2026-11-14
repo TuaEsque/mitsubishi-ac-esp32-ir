@@ -1,8 +1,9 @@
 # Office AC automation: ESP32 + IR for a Mitsubishi MSZ-HR35VF
 
-An ESP32 with an IR LED and an IR receiver, running **ESPHome**. Home Assistant
-discovers it as a device called **Office AC** with a thermostat (climate)
-entity, diagnostics and a restart button. It replaces the remote over IR, and
+An ESP32 with an IR LED, an IR receiver and an SHT40 temperature/humidity
+sensor, running **ESPHome**. Home Assistant discovers it as a device called
+**Office AC** with a thermostat (climate) entity, temperature and humidity
+sensors, diagnostics and a restart button. It replaces the remote over IR, and
 the receiver picks up presses on the real remote so Home Assistant's idea of
 the state stays closer to reality.
 
@@ -31,7 +32,8 @@ aircon-ir/
 ```
  Home Assistant  <== native API (encrypted, port 6053) ==>  ESP32 (ESPHome)
    "Office AC" device                                         |-- GPIO4  -> transistor -> IR LED  --> AC unit
-     climate.office_ac                                        '-- GPIO14 <- TSOP38238  <-- real remote
+     climate.office_ac                                        |-- GPIO14 <- TSOP38238  <-- real remote
+     Temperature, Humidity                                    '-- GPIO16 SDA / GPIO18 SCL <-> SHT40 (on a lead)
      Wi-Fi signal, uptime, status, firmware, restart
 ```
 
@@ -66,6 +68,10 @@ See `final-build-guide.md` (parts with typical prices, transistor options, wirin
 The receiver is now a **permanent** part of the build, not just a capture tool:
 mount it facing into the room, where it can see the real remote.
 
+The SHT40 sensor (added 14 Nov 2026) hangs on its own 20-30 cm lead outside the
+box, because the ESP32 warms the inside of the box. Shopping list, wiring and
+the retrofit steps for the already-soldered board are in `final-build-guide.md`.
+
 ## 2. Install ESPHome
 
 Use one of:
@@ -82,9 +88,9 @@ Use one of:
    add-on, paste the same keys into *Secrets* (top right of the dashboard).
    Generate the API key with:
    `python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"`
-2. Set `room_temperature_entity` at the top of `office-ac.yaml` to a
-   temperature sensor you already have, or leave it (the card then shows no
-   room temperature).
+2. Leave `temperature_offset` at the top of `office-ac.yaml` at `0.0` for
+   now. Set it later only if the SHT40 reads consistently off against a
+   trusted thermometer (see the build guide).
 3. Flash over USB:
    - Add-on: *New device*, name it `office-ac`, skip the install step, then
      *Edit* the new device, replace its YAML with `office-ac.yaml`, *Save*,
@@ -104,7 +110,8 @@ it the same API key. You then have:
 
 | Entity | What it is |
 |---|---|
-| `climate.office_ac` | Mode (off/heat_cool/cool/heat/dry/fan_only), set point 16-31 C in 1 C steps, fan auto/low/medium/middle/high (`set_fan_mode: 4levels`, see below) |
+| `climate.office_ac` | Mode (off/heat_cool/cool/heat/dry/fan_only), set point 16-31 C in 1 C steps, fan auto/low/medium/middle/high (`set_fan_mode: 4levels`, see below). Current temperature and humidity come from the SHT40 |
+| Temperature, Humidity | SHT40 readings every 60 s, as their own sensors for history graphs and automations |
 | Wi-Fi signal, Uptime, Firmware version | Diagnostics (shown under the device's *Diagnostic* section) |
 | Status | Connectivity: is the board online |
 | Restart | Button that reboots the board |
@@ -182,6 +189,11 @@ recommended path: it does not create a Home Assistant device.
 - **Receiver placement.** The remote is aimed at the AC unit, so put the box
   near the unit with the receiver facing the room. If the card does not follow
   the remote, move it or angle it.
+- **Sensor placement.** Keep the SHT40 out of the AC's airflow and clear of
+  the box, or it reports the AC's outlet air or the ESP32's warmth. Near the
+  ceiling it reads warmer than desk height; that is the room, not a fault.
+  If the I2C scan at boot finds nothing at 0x44, check SDA and SCL are not
+  swapped and the lead is on VIN, not the breakout's 3V pin.
 - **2.4 GHz Wi-Fi only.** The ESP32 cannot join 5 GHz.
 - **Range.** If the unit only responds up close, use the second LED or check
   the LED is aimed at the unit's receiver window.
@@ -207,8 +219,13 @@ As of 2026-11-05: **built and commissioned.** Only the enclosure is left.
   Assistant control works, the receiver follows the real remote from where it is
   normally used, and the physical remote still controls the unit directly.
   `dump: all` is commented out on the board.
-- **Still to do:** the enclosure, planned as a 3D-printed box (separate
-  project). Size and hole positions are in `final-build-guide.md`.
+- **Ambient sensor (14 Nov 2026):** designed, not built. SHT40 breakout on a
+  lead (J2) with I2C on GPIO16/GPIO18. `office-ac.yaml` passes
+  `esphome config` (ESPHome 2026.10.2) but has not been compiled or run with
+  the sensor; the perfboard additions pass the netlist check in
+  `tools/perfboard.py`.
+- **Still to do:** fit the sensor, then the enclosure (modelled in
+  `enclosure/`, not printed). It now has a notch for the sensor lead.
 - `homeassistant/office_ac.yaml` has been parsed as YAML but not loaded into
   Home Assistant.
 - The fallback PlatformIO firmware and Python tools are as described in

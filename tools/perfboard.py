@@ -90,6 +90,9 @@ PARTS: tuple[Part, ...] = (
     Part("LED2", "led", {"A": "R8", "K": "R7"}),
     Part("LED1", "led", {"A": "R11", "K": "R10"}),
     Part("J1", "lead", {"VS": "L1", "GND": "M2", "OUT": "M4"}, "TSOP38238 flying lead"),
+    # Added 14 Nov 2026 to the already-soldered board: every hole below was free.
+    Part("J2", "lead", {"VCC": "M1", "GND": "O1", "SDA": "M6", "SCL": "M9"},
+         "SHT40 flying lead"),
 )
 
 # Bare tinned wire (part legs or resistor offcuts) on the solder side,
@@ -106,6 +109,10 @@ TRACES: tuple[tuple[str, ...], ...] = (
     ("R8", "R9", "R10"),                            # LED2 + -> LED1 -
     ("R11", "Q11", "Q12", "Q13", "Q14", "Q15"),     # LED1 + -> R1-R3
     ("M11", "M12", "M13", "M14", "M15"),            # VIN bus -> R1-R3
+    ("L1", "M1"),                                   # 3V3 -> SHT40 VCC
+    ("O2", "O1"),                                   # GND -> SHT40 GND
+    ("K6", "L6", "M6"),                             # RX2 (GPIO16) -> SHT40 SDA
+    ("K9", "L9", "M9"),                             # D18 (GPIO18) -> SHT40 SCL
 )
 
 LINKS: tuple[Link, ...] = (
@@ -120,10 +127,34 @@ NETS: tuple[Net, ...] = (
     Net("Collector", "LED", frozenset({"LED2.K", "Q1.C"})),
     Net("Base", "GPIO4", frozenset({"R4.2", "Q1.B"})),
     Net("GPIO4", "GPIO4", frozenset({"U1.D4", "R4.1"})),
-    Net("GND", "GND", frozenset({"U1.GND2", "Q1.E", "J1.GND"})),
-    Net("3V3", "3V3", frozenset({"U1.3V3", "J1.VS"})),
+    Net("GND", "GND", frozenset({"U1.GND2", "Q1.E", "J1.GND", "J2.GND"})),
+    Net("3V3", "3V3", frozenset({"U1.3V3", "J1.VS", "J2.VCC"})),
     Net("GPIO14", "GPIO14", frozenset({"U1.D14", "J1.OUT"})),
+    Net("SDA", "SDA", frozenset({"U1.RX2", "J2.SDA"})),
+    Net("SCL", "SCL", frozenset({"U1.D18", "J2.SCL"})),
 )
+
+
+@dataclass(frozen=True)
+class LeadDrawing:
+    """Where a flying lead's free ends are drawn on the component-side view."""
+
+    short_name: str                   # used in hole labels, e.g. "TSOP VS"
+    order: tuple[str, ...]            # pins left to right at the free end
+    end_xy: tuple[float, float]       # first free end, in board units
+    caption: str
+    label_below: bool = False         # solder-side hole labels below the hole
+
+
+LEAD_DRAWINGS = {
+    "J1": LeadDrawing("TSOP", ("VS", "GND", "OUT"), (14.8, -2.9),
+                      "J1: flying lead to the TSOP38238\n(cut F-F jumpers; receiver plugs in)\n"
+                      "TSOP, dome facing you: 1 OUT · 2 GND · 3 VS"),
+    "J2": LeadDrawing("SHT40", ("VCC", "GND", "SDA", "SCL"), (19.3, -2.9),
+                      "J2: flying lead to the SHT40\n(cut F-F jumpers, 20–30 cm)\n"
+                      "VCC → sensor VIN, not 3V",
+                      label_below=True),
+}
 
 
 # --------------------------------------------------------------------------
@@ -261,7 +292,7 @@ def _draw_board(ax, mirror: bool) -> None:
 
 
 def _socket_labels(ax, mirror: bool) -> None:
-    used = {"VIN", "D14", "3V3", "GND2", "D4"}
+    used = {"VIN", "D14", "3V3", "GND2", "D4", "RX2", "D18"}
     for names, col in ((ESP_VIN_ROW, "A"), (ESP_3V3_ROW, "K")):
         for row, name in enumerate(names, start=1):
             x, y = _pt(f"{col}{row}", mirror)
@@ -363,11 +394,12 @@ def _draw_led(ax, part: Part) -> None:
 
 
 def _draw_lead(ax, part: Part, analysis: Analysis, colours: dict[str, str]) -> None:
-    """Flying lead to the TSOP38238: cut F-F jumpers, receiver plugs into the ends."""
-    order = ("VS", "GND", "OUT")          # left to right on the drawing, no crossings
-    base_x, base_y = 14.8, -2.9
-    for i, pin in enumerate(order):
-        end = (base_x + 1.15 * i, base_y)
+    """Flying lead made of cut F-F jumpers; the off-board part plugs into the ends."""
+    drawing = LEAD_DRAWINGS[part.ref]
+    base_x, base_y = drawing.end_xy
+    spacing = 1.15
+    for i, pin in enumerate(drawing.order):
+        end = (base_x + spacing * i, base_y)
         hole = part.pins[pin]
         colour = colours[analysis.hole_net[hole].colour_key]
         ax.add_patch(patches.FancyArrowPatch(end, _pt(hole, False), arrowstyle="-",
@@ -375,10 +407,8 @@ def _draw_lead(ax, part: Part, analysis: Analysis, colours: dict[str, str]) -> N
                                              color=colour, lw=2.2, zorder=4.5))
         ax.text(end[0], end[1] - 0.45, pin, ha="center", va="top", fontsize=7,
                 fontweight="bold", color=colour)
-    ax.text(base_x + 1.15, base_y - 1.25,
-            "J1: flying lead to the TSOP38238\n(cut F-F jumpers; receiver plugs in)\n"
-            "TSOP, dome facing you: 1 OUT · 2 GND · 3 VS",
-            ha="center", va="top", fontsize=6.5)
+    centre_x = base_x + spacing * (len(drawing.order) - 1) / 2
+    ax.text(centre_x, base_y - 1.25, drawing.caption, ha="center", va="top", fontsize=6.5)
 
 
 def _draw_esp32_outline(ax) -> None:
@@ -402,7 +432,7 @@ def _hole_label(part: Part, pin: str) -> str:
     if part.kind == "led":
         return f"{part.ref} {'+' if pin == 'A' else '−'}"
     if part.kind == "lead":
-        return f"TSOP {pin}"
+        return f"{LEAD_DRAWINGS[part.ref].short_name} {pin}"
     return f"{part.ref} {pin}"
 
 
@@ -410,9 +440,11 @@ def _solder_side_labels(ax) -> None:
     for part in PARTS:
         if part.kind == "socket":
             continue
+        below = part.kind == "lead" and LEAD_DRAWINGS[part.ref].label_below
         for pin, hole in part.pins.items():
             x, y = _pt(hole, True)
-            ax.text(x, y + 0.45, _hole_label(part, pin), ha="center", va="bottom",
+            ax.text(x, y - 0.45 if below else y + 0.45, _hole_label(part, pin),
+                    ha="center", va="top" if below else "bottom",
                     fontsize=5.5, zorder=6,
                     bbox=dict(fc="white", ec="none", alpha=0.7, pad=0.3))
     for link in LINKS:
@@ -481,7 +513,8 @@ def build(out_dir: Path, colours: dict[str, str]) -> list[Path]:
     for net in NETS:
         if net.colour_key not in used_keys:
             used_keys.append(net.colour_key)
-    names = {"GPIO4": "GPIO4 / base", "LED": "LED string"}
+    names = {"GPIO4": "GPIO4 / base", "LED": "LED string",
+             "SDA": "SDA (GPIO16)", "SCL": "SCL (GPIO18)"}
     handles = [Line2D([], [], color=colours[k], lw=5, label=names.get(k, k)) for k in used_keys]
     handles += [Line2D([], [], color="#666", lw=4, label="bare wire (solder side)"),
                 Line2D([], [], color="#666", lw=2.4, ls=(0, (5, 2.5)),

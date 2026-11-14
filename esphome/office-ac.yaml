@@ -1,24 +1,25 @@
-# Office AC: ESPHome firmware for the ESP32 + IR LED + IR receiver.
+# Office AC: ESPHome firmware for the ESP32 + IR LED + IR receiver + SHT40.
 #
 # Home Assistant discovers this as a device called "Office AC" with:
-#   - a climate entity (mode, set point, fan) that sends Mitsubishi Electric IR
+#   - a climate entity (mode, set point, fan) that sends Mitsubishi Electric IR,
+#     showing the room temperature and humidity from the SHT40
+#   - Temperature and Humidity sensors (SHT40 on its own lead)
 #   - diagnostics: Wi-Fi signal, uptime, online status, firmware version
 #   - a restart button
 #
-# Running on the ESP32 since 2026-11-02 (ESPHome 2026.10.1). Tested against the
-# MSZ-HR35VF: the receiver decodes the real remote, and frames sent from Home
-# Assistant are accepted by the unit (direct-drive LED, ~40 cm; transistor
-# stage still to build for full range).
+# IR part running on the ESP32 since 2026-11-02 (ESPHome 2026.10.1) and
+# commissioned on the soldered board on 2026-11-05. The SHT40 section was added
+# on 2026-11-14 and validated with `esphome config`; not yet on the board.
 #
 # secrets.yaml (ESPHome's own file, not committed) needs:
 #   wifi_ssid, wifi_password, fallback_ap_password, api_key
 # Generate api_key with:  python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
 
 substitutions:
-  # Any temperature sensor already in Home Assistant. It only feeds the
-  # "current temperature" on the thermostat card. If it does not exist the card
-  # just shows no room temperature; nothing else breaks.
-  room_temperature_entity: sensor.office_temperature
+  # Calibration for the SHT40, in degrees C. Leave at 0.0 unless it reads
+  # consistently off against a trusted thermometer placed next to it (after an
+  # hour to settle). A positive reading error needs a negative offset.
+  temperature_offset: "0.0"
 
 esphome:
   name: office-ac
@@ -69,11 +70,33 @@ remote_receiver:
   # While commissioning, uncomment to print every frame the receiver sees.
   # dump: all
 
+# I2C bus for the SHT40. The ESP32 can put I2C on almost any GPIO; these two
+# sit next to free holes on the perfboard (RX2 = GPIO16 at K6, D18 = GPIO18 at
+# K9), so no wire has to cross the board. Neither is a boot strapping pin. The
+# Adafruit breakout has its own 10k pull-ups, which matter more than the ESP32's
+# weak internal ones on a 20-30 cm lead.
+i2c:
+  id: i2c_bus
+  sda: GPIO16
+  scl: GPIO18
+  frequency: 100kHz
+  # Logs the address of every device found at boot. Expect 0x44 for the SHT40.
+  scan: true
+
 sensor:
-  - platform: homeassistant
-    id: room_temperature
-    entity_id: ${room_temperature_entity}
-    internal: true
+  - platform: sht4x
+    address: 0x44
+    update_interval: 60s
+    temperature:
+      id: room_temperature
+      name: Temperature
+      accuracy_decimals: 1
+      filters:
+        - offset: ${temperature_offset}
+    humidity:
+      id: room_humidity
+      name: Humidity
+      accuracy_decimals: 0
 
   - platform: wifi_signal
     name: Wi-Fi signal
@@ -103,7 +126,9 @@ climate:
     name: None
     transmitter_id: ir_tx
     receiver_id: ir_rx
+    # Current temperature and humidity on the thermostat card, from the SHT40.
     sensor: room_temperature
+    humidity_sensor: room_humidity
     supports_cool: true
     supports_heat: true
     supports_dry: true

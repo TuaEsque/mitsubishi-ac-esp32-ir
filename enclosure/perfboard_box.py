@@ -100,6 +100,14 @@ LED_WINDOW_ABOVE = 8.0      # window top, above the board's top surface
 TSOP_HOLE_D = 5.5
 TSOP_FROM_ANTENNA_WALL = 15.0
 
+# SHT40 lead (J2 on the perfboard): a notch down from the top of the row-1 wall,
+# over column N, so the sensor lead leaves beside the USB cable. The lid closes
+# the top, leaving a W x DEPTH opening: room for four jumper wires side by side
+# without threading the plugs through a hole.
+SENSOR_NOTCH_COL = 14       # column N, between the J2 holes in columns M and O
+SENSOR_NOTCH_W = 7.0
+SENSOR_NOTCH_DEPTH = 4.0
+
 MIN_CLEARANCE = 1.0         # smallest gap allowed between separate features
 
 
@@ -131,6 +139,7 @@ class Layout:
     usb_centre: tuple[float, float]         # (x, z)
     led_window: tuple[float, float, float, float]   # (y centre, width, z bottom, z top)
     tsop: tuple[float, float]
+    sensor_notch: tuple[float, float]       # (x centre, z bottom)
 
     @property
     def outer_w(self) -> float:
@@ -173,9 +182,11 @@ def make_layout() -> Layout:
                   board_top_z + LED_WINDOW_ABOVE)
 
     tsop = (board_x0 + BOARD_W + GAP_RIGHT / 2, inner_l / 2 - TSOP_FROM_ANTENNA_WALL)
+    sensor_notch = (board_x0 + board_hole(SENSOR_NOTCH_COL, 1)[0],
+                    inner_top_z - SENSOR_NOTCH_DEPTH)
 
     return Layout(inner_w, inner_l, inner_top_z - FLOOR, board_x0, board_y0, board_top_z,
-                  standoffs, lid_bosses, (usb_x, usb_z), led_window, tsop)
+                  standoffs, lid_bosses, (usb_x, usb_z), led_window, tsop, sensor_notch)
 
 
 def check_layout(lay: Layout) -> list[str]:
@@ -216,6 +227,16 @@ def check_layout(lay: Layout) -> list[str]:
     for b in lay.lid_bosses:
         if math.dist((tx, ty), b) < boss_r + TSOP_HOLE_D / 2 + MIN_CLEARANCE:
             errors.append(f"receiver hole clashes with lid boss {b}")
+
+    notch_x, notch_bottom = lay.sensor_notch
+    usb_gap = abs(notch_x - lay.usb_centre[0]) - (SENSOR_NOTCH_W + USB_SLOT_W) / 2
+    if usb_gap < MIN_CLEARANCE:
+        errors.append(f"sensor notch is {usb_gap:.2f} mm from the USB slot")
+    boss_gap = min(abs(notch_x - b[0]) for b in lay.lid_bosses) - SENSOR_NOTCH_W / 2 - boss_r
+    if boss_gap < MIN_CLEARANCE:
+        errors.append(f"sensor notch is {boss_gap:.2f} mm from a lid boss")
+    if notch_bottom < lay.board_top_z + MIN_CLEARANCE:
+        errors.append("sensor notch reaches down to the board")
     return errors
 
 
@@ -255,6 +276,12 @@ def build_base(lay: Layout) -> Part:
     usb_x, usb_z = lay.usb_centre
     base -= Pos(usb_x, -lay.inner_l / 2 - WALL / 2, usb_z) * Box(
         USB_SLOT_W, through, USB_SLOT_H)
+
+    # Notch cut 1 mm above the wall top so no skin is left over it.
+    notch_x, notch_bottom = lay.sensor_notch
+    notch_h = lay.base_h - notch_bottom + 1
+    base -= Pos(notch_x, -lay.inner_l / 2 - WALL / 2, notch_bottom + notch_h / 2) * Box(
+        SENSOR_NOTCH_W, through, notch_h)
 
     win_y, win_w, win_bottom, win_top = lay.led_window
     base -= Pos(lay.inner_w / 2 + WALL / 2, win_y, (win_bottom + win_top) / 2) * Box(

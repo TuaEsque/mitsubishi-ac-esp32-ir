@@ -11,6 +11,7 @@ Outside it measures 72.5 × 76 × 30.6 mm (inside 68.5 × 72 × 26.6 mm).
 | USB slot | Row-1 wall, centred on the ESP32 | 13 × 8 mm, big enough for a micro-USB or USB-C plug's overmould |
 | IR LED window | Column-R wall (faces the AC) | 21 × 11 mm, spans both LEDs with room for their ~10° splay |
 | Receiver hole | Lid, over the LED-side gap near the antenna end | Ø5.5 mm. Push the TSOP38238's dome into it from inside and fix it with a dab of hot glue |
+| Sensor lead notch | Top of the row-1 wall, over column N (about 10 mm beside the USB slot) | 7 × 4 mm once the lid is on. Lay the SHT40's four jumper wires in it side by side, so the plugs never need threading through a hole; a cable tie or dab of hot glue inside is the strain relief |
 
 ## Build it
 
@@ -22,7 +23,7 @@ python enclosure/perfboard_box.py --no-show
 
 Outputs in `out/`: `base.stl`, `lid.stl` (already flat for printing), `fit_test.stl` and `enclosure.step`.
 
-The script works out every position as numbers first, then `check_layout()` checks for clashes (standoffs against lid bosses, bosses against the board edge, wall above the USB slot, and so on). It stops without exporting if anything is closer than 1 mm.
+The script works out every position as numbers first, then `check_layout()` checks for clashes (standoffs against lid bosses, bosses against the board edge, wall above the USB slot, sensor notch against the USB slot and bosses, and so on). It stops without exporting if anything is closer than 1 mm.
 
 ## Measure before the full print
 

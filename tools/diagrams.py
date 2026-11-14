@@ -2,7 +2,7 @@
 """Generate the final-build diagrams for the Office AC project.
 
 Outputs (SVG + PNG) go to docs/diagrams/:
-  schematic      Schemdraw circuit: ESP32, transistor LED stage, TSOP38238
+  schematic      Schemdraw circuit: ESP32, transistor LED stage, TSOP38238, SHT40
   system         Graphviz: Home Assistant <-> ESP32 <-> IR <-> MSZ-HR35VF
   wiring         Graphviz: point-to-point wiring, coloured by net, with the
                  breadboard line letters (A-G) used in the build notes
@@ -84,6 +84,8 @@ NET_COLOURS = {
     "GPIO4": "#bcae00",   # yellow (darkened for contrast on white)
     "GPIO14": "#2ca02c",  # green
     "LED": "#1f77b4",     # blue: internal links on the LED stage
+    "SDA": "#9467bd",     # purple: I2C data, GPIO16
+    "SCL": "#8c564b",     # brown: I2C clock, GPIO18
 }
 
 
@@ -100,17 +102,20 @@ def build_schematic(out_dir: Path) -> list[Path]:
     d = schemdraw.Drawing(show=False)
     d.config(fontsize=11, bgcolor="white", unit=2.5, lw=1.4)
 
-    # ESP32 as a block. Receiver pins on the left, LED-stage pins on the right,
-    # so the two sub-circuits never cross. Pin labels give the DOIT silk name.
+    # ESP32 as a block. Receiver and sensor pins on the left, LED-stage pins on
+    # the right, so the sub-circuits never cross. Pin labels give the DOIT silk
+    # name.
     esp = d.add(elm.Ic(
-        size=(5.0, 6.0),
+        size=(5.0, 7.0),
         pins=[
-            elm.IcPin(name="3V3", side="left", pos=0.80, anchorname="p3v3", lblsize=10),
-            elm.IcPin(name="D14 (GPIO14)", side="left", pos=0.50, anchorname="p14", lblsize=10),
-            elm.IcPin(name="GND", side="left", pos=0.20, anchorname="gnd_l", lblsize=10),
-            elm.IcPin(name="VIN (≈5 V)", side="right", pos=0.80, anchorname="vin", lblsize=10),
-            elm.IcPin(name="D4 (GPIO4)", side="right", pos=0.50, anchorname="p4", lblsize=10),
-            elm.IcPin(name="GND", side="right", pos=0.20, anchorname="gnd_r", lblsize=10),
+            elm.IcPin(name="3V3", side="left", pos=0.88, anchorname="p3v3", lblsize=10),
+            elm.IcPin(name="D14 (GPIO14)", side="left", pos=0.72, anchorname="p14", lblsize=10),
+            elm.IcPin(name="GND", side="left", pos=0.56, anchorname="gnd_l", lblsize=10),
+            elm.IcPin(name="RX2 (GPIO16)", side="left", pos=0.28, anchorname="p16", lblsize=10),
+            elm.IcPin(name="D18 (GPIO18)", side="left", pos=0.12, anchorname="p18", lblsize=10),
+            elm.IcPin(name="VIN (≈5 V)", side="right", pos=0.88, anchorname="vin", lblsize=10),
+            elm.IcPin(name="D4 (GPIO4)", side="right", pos=0.60, anchorname="p4", lblsize=10),
+            elm.IcPin(name="GND", side="right", pos=0.40, anchorname="gnd_r", lblsize=10),
         ],
     ).label("ESP32 DOIT DevKit V1\n(ESPHome)", loc="top", fontsize=11))
 
@@ -184,6 +189,30 @@ def build_schematic(out_dir: Path) -> list[Path]:
         d.add(elm.Line().at((jog_x, tsop_pin[1])).to(tsop_pin))
     d.add(elm.Ground().at((jog_x, esp.gnd_l[1])))
 
+    # ---- Temperature / humidity sensor -------------------------------------
+    # Power pins face away from the ESP32 and use net symbols (3V3, ground),
+    # so only SDA and SCL run across to the ESP32.
+    sht = d.add(elm.Ic(
+        size=(2.6, 2.4),
+        pins=[
+            elm.IcPin(name="VIN", side="left", pos=0.70, anchorname="vin", lblsize=10),
+            elm.IcPin(name="GND", side="left", pos=0.30, anchorname="gnd", lblsize=10),
+            elm.IcPin(name="SDA", side="right", pos=0.70, anchorname="sda", lblsize=10),
+            elm.IcPin(name="SCL", side="right", pos=0.30, anchorname="scl", lblsize=10),
+        ],
+    ).right().anchor("sda").at((esp.p16[0] - 4.0, esp.p16[1]))
+      .label("SHT40 breakout (Adafruit 4885)\nI²C address 0x44", loc="bottom", fontsize=9))
+
+    d.add(elm.Line().at(esp.p16).to(sht.sda))
+    sht_jog_x = sht.scl[0] + 1.6
+    d.add(elm.Line().at(esp.p18).to((sht_jog_x, esp.p18[1])))
+    d.add(elm.Line().at((sht_jog_x, esp.p18[1])).to((sht_jog_x, sht.scl[1])))
+    d.add(elm.Line().at((sht_jog_x, sht.scl[1])).to(sht.scl))
+    d.add(elm.Line().at(sht.vin).left(0.6))
+    d.add(elm.Vdd().label("3V3", fontsize=10))
+    d.add(elm.Line().at(sht.gnd).left(0.6))
+    d.add(elm.Ground())
+
     # ---- Notes ------------------------------------------------------------
     notes = (
         "Notes\n"
@@ -195,9 +224,12 @@ def build_schematic(out_dir: Path) -> list[Path]:
         "  (confirmed by diode test, 3 Nov 2026: base→C ≈ 0.70 V, B→E slightly higher).\n"
         f"• Currents assume VIN {c.supply_v:g} V, Vf {c.led_vf:g} V per LED; "
         f"at VIN 4.7 V expect ≈ {c.led_ma_at(4.7):.0f} mA.\n"
-        "• Range step-up if needed: 15 Ω LED resistor, 220 Ω base, 100–470 µF across VIN–GND."
+        "• Range step-up if needed: 15 Ω LED resistor, 220 Ω base, 100–470 µF across VIN–GND.\n"
+        "• SHT40 on a 20–30 cm lead outside the box: the ESP32 warms the inside of the box.\n"
+        "  VIN from 3V3 (its 3V pin is an output, leave it empty). 10 kΩ pull-ups are on the breakout.\n"
+        "• I²C on GPIO16/GPIO18: free holes next to them on the board, and neither is a strapping pin."
     )
-    d.add(elm.Label().at((esp.gnd_l[0] - 4.5, esp.gnd_l[1] - 5.2))
+    d.add(elm.Label().at((esp.gnd_l[0] - 7.0, esp.p18[1] - 3.2))
           .label(notes, halign="left", valign="top", fontsize=9))
 
     return _save_schemdraw(d, out_dir / "schematic")
@@ -254,8 +286,10 @@ def build_system(out_dir: Path) -> list[Path]:
 
     with g.subgraph(name="cluster_ha") as ha:
         ha.attr(label="Home Assistant", style="rounded", color="#4a90d9")
-        ha.node("climate", "climate.office_ac\nmode · set point 16–31 °C · fan")
+        ha.node("climate", "climate.office_ac\nmode · set point 16–31 °C · fan\n"
+                           "current temperature + humidity")
         ha.node("diag", "Diagnostics\nWi-Fi signal · Uptime · Status\nFirmware · Restart")
+        ha.node("env", "Temperature · Humidity\n(sensor entities)")
 
     with g.subgraph(name="cluster_box") as box:
         box.attr(label="Controller box (ESP32 + IR)", style="rounded", color="#2ca02c")
@@ -267,6 +301,8 @@ def build_system(out_dir: Path) -> list[Path]:
 
     g.node("ac", "Mitsubishi Electric\nMSZ-HR35VF", shape="box3d", fillcolor="#e3f2fd")
     g.node("remote", "Real remote", shape="box3d", fillcolor="#e3f2fd")
+    g.node("sht", "SHT40 temperature + humidity\non a 20–30 cm lead, outside the box",
+           fillcolor="#f3e5f5")
 
     g.edge("climate", "esp", label="native API :6053\nencrypted, 2.4 GHz Wi-Fi", dir="both")
     g.edge("diag", "esp", dir="back", style="dashed")
@@ -276,6 +312,9 @@ def build_system(out_dir: Path) -> list[Path]:
     g.edge("remote", "tsop", label="IR presses", color="#d62728", fontcolor="#d62728")
     g.edge("remote", "ac", style="dotted", color="#d62728")
     g.edge("tsop", "esp", label="GPIO14\ndemodulated")
+    g.edge("sht", "esp", label="I²C\nGPIO16 SDA · GPIO18 SCL", color=NET_COLOURS["SDA"],
+           fontcolor=NET_COLOURS["SDA"])
+    g.edge("env", "esp", dir="back", style="dashed")
 
     g.node("note", "IR is one-way: the entity shows what was last sent or seen,\n"
                    "not the unit's real state (timers, presses aimed away).",
@@ -319,9 +358,14 @@ def build_wiring(out_dir: Path) -> list[Path]:
         '<TD PORT="d4" ALIGN="RIGHT">D4  (3V3 row, pin 5)</TD></TR>'
         '<TR><TD PORT="gnd1" ALIGN="LEFT">GND  (3V3 row, pin 2)</TD>'
         '<TD PORT="gnd2" ALIGN="RIGHT">GND  (VIN row, pin 2)</TD></TR>'
+        '<TR><TD PORT="rx2" ALIGN="LEFT">RX2 = GPIO16  (3V3 row, pin 6)</TD><TD></TD></TR>'
+        '<TR><TD PORT="d18" ALIGN="LEFT">D18 = GPIO18  (3V3 row, pin 9)</TD><TD></TD></TR>'
         '</TABLE>>'
     )
     g.node("esp", esp_label)
+    g.node("sht", _part("SHT40 breakout (header: VIN 3V GND SCL SDA)",
+                        [("vin", "VIN"), ("v3", "3V  (output: leave empty)"), ("gnd", "GND"),
+                         ("scl", "SCL"), ("sda", "SDA")], "#f3e5f5"))
 
     g.node("res", _part(f"{c.led_r_count} × {_fmt_ohm(c.led_r_ohm)} in parallel "
                         f"≈ {c.led_r_total:.0f} Ω",
@@ -342,6 +386,12 @@ def build_wiring(out_dir: Path) -> list[Path]:
     wire("tsop:vs:e", "esp:v33:w", "3V3")
     wire("tsop:out:e", "esp:d14:w", "GPIO14")
     wire("tsop:gnd:e", "esp:gnd1:w", "GND")
+
+    # Sensor lead (J2 on the perfboard), also on the left of the board.
+    wire("sht:vin:e", "esp:v33:w", "3V3")
+    wire("sht:gnd:e", "esp:gnd1:w", "GND")
+    wire("sht:sda:e", "esp:rx2:w", "SDA")
+    wire("sht:scl:e", "esp:d18:w", "SCL")
 
     # LED stage (right of the board), lines A-G as built on the breadboard.
     wire("esp:vin:e", "res:a:w", "VIN", "A")
@@ -364,7 +414,9 @@ def build_wiring(out_dir: Path) -> list[Path]:
                              "• no continuity VIN–GND or 3V3–GND\n"
                              "• D4 goes only to Rb\n"
                              "• Q1 E-B-C left to right: left → G, middle → E, right → D\n"
-                             "• both LEDs: long leg towards VIN")
+                             "• both LEDs: long leg towards VIN\n"
+                             "• SHT40 lead: 3V3, GND, GPIO16, GPIO18 do not\n"
+                             "  beep to each other or to VIN")
     g.edge("esp", "pins", style="invis")
     g.edge("q1", "checks", style="invis")
     return _save_graphviz(g, out_dir / "wiring")
@@ -387,7 +439,8 @@ BUILD_STEPS = [
     ("layout", "Perfboard layout drawn\n(docs/diagrams/perfboard)", "done"),
     ("solder", "Soldered on perfboard,\nESP32 in sockets, powered", "done"),
     ("commission", "Commissioned: HA control,\nreceiver follows remote,\nphysical remote still works", "done"),
-    ("box", "Enclosure (3D-printed):\n2 LED holes → AC, receiver\nhole → room, USB slot", "next"),
+    ("sensor", "SHT40 on a lead (J2):\nGPIO16 SDA, GPIO18 SCL,\nsht4x in ESPHome", "next"),
+    ("box", "Enclosure modelled (build123d):\nfit test, then print base + lid;\nsensor lead out by the USB slot", "todo"),
 ]
 STATUS_STYLE = {
     "done": {"fillcolor": "#c8e6c9", "color": "#2e7d32"},
@@ -399,7 +452,7 @@ STATUS_STYLE = {
 
 def build_status(out_dir: Path) -> list[Path]:
     g = _new_graph("build-status", rankdir="TB")
-    g.attr(label="Build order (status 5 Nov 2026)", labelloc="t", fontsize="16")
+    g.attr(label="Build order (status 14 Nov 2026)", labelloc="t", fontsize="16")
 
     ids = [step_id for step_id, _, status in BUILD_STEPS if status != "optional"]
     for step_id, text, status in BUILD_STEPS:

@@ -11,7 +11,8 @@ This is the current reference for parts, wiring and the build. Superseded files 
 | Transistor | 2N2222A (from a multipack), pinout confirmed E-B-C by diode test (see below) |
 | LED stage | **Working on the breadboard (3 Nov 2026).** All power-off checks passed (A-B 36 ohm, base resistor 475 ohm, VIN-GND about 1.6 kohm). Loopback frames received; the AC responds from the mounting position; transistor stays cold |
 | Perfboard | **Soldered and commissioned (5 Nov 2026).** ESP32 in its sockets, Home Assistant controls the AC, receiver follows the real remote, physical remote still works |
-| Enclosure | **Modelled (12 Nov 2026), not printed yet.** Parametric build123d box in `enclosure/`: board on corner standoffs, LED window, USB slot, receiver hole in the lid. Check the measurements in enclosure/README.md and print fit_test.stl first |
+| Ambient sensor | **Designed (14 Nov 2026), parts to order.** SHT40 temperature/humidity breakout on its own lead (J2), I2C on GPIO16/GPIO18. Config validated, perfboard additions netlist-checked. See *Ambient temperature and humidity sensor* below |
+| Enclosure | **Modelled (12 Nov 2026), not printed yet.** Parametric build123d box in `enclosure/`: board on corner standoffs, LED window, USB slot, receiver hole in the lid, and (14 Nov) a notch by the USB slot for the sensor lead. Check the measurements in enclosure/README.md and print fit_test.stl first |
 | Solder | own reel: Sn-0.7Cu, 2% flux, 1 mm |
 | Tools | own: soldering iron, multimeter, drill, side cutters |
 
@@ -43,6 +44,22 @@ Suggested stores:
 - **Amazon, eBay**: multipacks and ESP32 boards from UK sellers; check the listing names the exact part.
 - **AliExpress**: cheapest for ESP32 boards and LEDs, but delivery takes weeks.
 
+### Ambient sensor shopping list (added 14 Nov 2026)
+
+Prices checked 14 Nov 2026, inc VAT, before postage.
+
+| Qty | Item | Where, typical price | Why |
+| :---- | :---- | :---- | :---- |
+| 1 | **Adafruit SHT40 temperature & humidity breakout, STEMMA QT (Adafruit 4885)** | The Pi Hut or Pimoroni, about £5.70 | Sensirion SHT40: ±0.2 °C, ±1.8 %RH typical. The breakout has 10 kΩ I2C pull-ups, a regulator and a 5-pin header strip (solder it on). ESPHome supports it directly (`sht4x`) |
+| 4 | Female-female jumper wires, 20-30 cm | From the jumper set you already have; otherwise £2-£4 for a 40-wire ribbon | Cut in half to make the J2 lead, as with the receiver lead |
+| - | Cable tie or a dab of hot glue | Already in hand | Strain relief where the lead leaves the box |
+
+Expect about **£6 plus postage**. The Pi Hut showed low stock on the SHT40; Pimoroni stocks the same part. An SHT41 or SHT45 breakout also works with the same wiring and config, but costs more and the accuracy gain does not matter in an office.
+
+Budget alternative: **DFRobot Fermion AHT20 (SEN0527)**, about £3.60 at The Pi Hut. It is less accurate (about ±0.3 °C, ±2 %RH) but fine for a thermostat card. It wires the same way (VCC, GND, SDA, SCL); in `office-ac.yaml` replace the `sht4x` block with `platform: aht10`, `variant: AHT20` (address 0x38). Check the listing says it has pull-up resistors.
+
+Not chosen: DHT11/DHT22 (older, less accurate, slow single-wire protocol), BME280 (pricier, adds pressure you do not need, and many cheap "BME280" boards are BMP280s with no humidity sensor).
+
 ## Transistor options (NPN, \~65 mA switching, TO-92)
 
 - PN2222A / 2N2222A (plastic, usually emitter-base-collector). Available from the distributors above in packs of 5-10.
@@ -66,6 +83,13 @@ IR LED stage (as built on the breadboard, 2 Nov 2026):
 - LED2 cathode \-\> transistor collector (right leg, flat face towards you)  
 - transistor emitter (left leg) \-\> GND  
 - GPIO4 \-\> 470 ohm \-\> transistor base (middle leg)
+
+Ambient sensor (SHT40 breakout on the J2 lead, added 14 Nov 2026):
+
+- Breakout **VIN** to **3V3**, **GND** to GND, **SDA** to **GPIO16** (silk "RX2"), **SCL** to **GPIO18** (silk "D18").
+- Leave the breakout's **3V** pin empty: it is the output of its own regulator, not an input.
+- Why GPIO16 and GPIO18 and not the usual 21/22: the ESP32 can route I2C to almost any pin, and these two have free holes right next to them on the perfboard (K6 and K9), so the retrofit needs no wire across the board. Neither is a boot strapping pin.
+- Why on a lead and not in the box: the ESP32 and its Wi-Fi radio warm the inside of a closed box by a few degrees, which would make the room look warmer than it is.
 
 Expected currents: LED about 65 mA at VIN 5 V (about 57 mA at 4.7 V), inside the LEDs' 100 mA continuous / 1 A pulsed rating; about 0.05 W per resistor; base about 5.5 mA.
 
@@ -100,6 +124,7 @@ Why this arrangement: the ESP32 sits in the bottom-left corner so the USB socket
 | LED2 | + R8, - R7 | Long leg (+) in the upper hole. Bend 90 degrees so it points out over the right edge |
 | LED1 | + R11, - R10 | As LED2; angle the two about 10 degrees apart |
 | Receiver lead (J1) | VS L1, GND M2, OUT M4 | Three F-F jumpers cut to length; the TSOP38238 plugs into the female ends (dome facing you: OUT, GND, VS) |
+| Sensor lead (J2) | VCC M1, GND O1, SDA M6, SCL M9 | Four F-F jumpers, 20-30 cm; the SHT40 breakout's header plugs into the female ends. Added 14 Nov 2026 to the soldered board: all four holes were free |
 
 **Solder-side wiring**
 
@@ -114,6 +139,10 @@ Why this arrangement: the ESP32 sits in the bottom-left corner so the USB socket
 | GND | K2-L2-O2-O3 | |
 | 3V3 | K1-L1 | |
 | GPIO14 | A5-B5; M4-N4 | W2: B5 to N4 |
+| 3V3 to J2 | L1-M1 (new) | |
+| GND to J2 | O2-O1 (new) | |
+| SDA (GPIO16) | K6-L6-M6 (new) | |
+| SCL (GPIO18) | K9-L9-M9 (new) | |
 
 **Order of work**
 
@@ -124,7 +153,17 @@ Why this arrangement: the ESP32 sits in the bottom-left corner so the USB socket
 5. **Receiver lead.** Cut three F-F jumpers to about 10-15 cm, strip and tin the cut ends, and solder them to L1 (VS), M2 (GND) and M4 (OUT). Use colours that make the pin order obvious.
 6. **Checks with the ESP32 out of its sockets and no power.** Resistance M12-Q12 is about 33 ohm, and L5-P5 is about 470 ohm. Continuity A1-M12 (VIN), K2-O3 (GND), A5-M4 (GPIO14) and K1-L1 (3V3) should beep. Neighbouring pads on different nets must not beep: K1-K2, L1-L2, A1-A2 and every pair of adjacent socket pins. In diode mode, red on P3 reads about 0.7 V to O3 and Q3, red on R8 reads about 0.97 V to R7, and red on R11 reads the same to R10. Then plug the ESP32 in, power up and repeat the loopback test.
 
-**Enclosure size.** The board plus the ESP32 in sockets stands about 25 mm tall including the solder joints underneath. The LEDs stick out about 10 mm past the right edge, and the ESP32's antenna end overhangs row 16 by a few millimetres. An inside space of about 65 x 55 x 30 mm is enough. Put the LED holes in the wall the right-hand edge faces, add a small hole facing the room for the receiver, and cut a USB slot at the row-1 end.
+**Adding the SHT40 to the soldered board (14 Nov 2026).** Everything goes into holes that are free on the current board, so nothing has to be desoldered. The perfboard diagram shows J2 and its four new traces (purple SDA, brown SCL, plus short orange and black stubs).
+
+1. **Prepare.** Unplug USB and lift the ESP32 out of its sockets. Solder the 5-pin header onto the SHT40 breakout, short pins through the board, long pins sticking out to take the jumper plugs.
+2. **Cut the lead.** Cut four F-F jumpers so 20-30 cm remains with the female end. Strip about 3 mm of each cut end and tin it. Use colours you will recognise: red VCC, black GND, and two others for SDA and SCL (note which is which).
+3. **Leads in.** From the component side, push the tinned ends into M1 (VCC), O1 (GND), M6 (SDA) and M9 (SCL), and solder them on the solder side. M1 sits next to M2, the receiver's GND: use a small amount of solder and keep the joint on its own pad.
+4. **Stubs on the solder side**, using resistor-leg offcuts as before: L1 to M1 (3V3), O2 to O1 (GND), K6 via L6 to M6 (SDA), K9 via L9 to M9 (SCL). L1, O2, K6 and K9 already have solder on them: add the offcut and reheat until it flows into the existing joint.
+5. **Checks, no power, ESP32 out.** Continuity should beep for K1-M1, K2-O1, K6-M6 and K9-M9. It must *not* beep for M1-M2, M1-O1, O1-M6, M6-M9, K5-K6, L5-L6, K8-K9, K9-K10, or between any two of the four J2 holes. Re-run the existing 3V3-GND and VIN-GND checks.
+6. **Power up.** Plug the ESP32 back in, plug the lead onto the breakout (VCC to VIN, GND to GND, SDA to SDA, SCL to SCL; 3V empty), install the updated `office-ac.yaml` wirelessly and open the logs. The I2C scan at boot should report a device at **0x44**, and *Temperature* and *Humidity* appear on the Office AC device. The thermostat card then shows the room temperature and humidity.
+7. **Place and calibrate.** Lead out through the notch by the USB slot (see *Enclosure size*), sensor hanging clear of the box and out of the AC's airflow. After an hour, compare with a trusted thermometer next to it; if it is consistently off, set `temperature_offset` at the top of `office-ac.yaml` and reinstall.
+
+**Enclosure size.** The board plus the ESP32 in sockets stands about 25 mm tall including the solder joints underneath. The LEDs stick out about 10 mm past the right edge, and the ESP32's antenna end overhangs row 16 by a few millimetres. An inside space of about 65 x 55 x 30 mm is enough. Put the LED holes in the wall the right-hand edge faces, add a small hole facing the room for the receiver, and cut a USB slot at the row-1 end. The sensor lead leaves through a 7 × 4 mm notch at the top of the row-1 wall, over column N, so both cables leave the same end; the lid closes over it.
 
 ## Build order
 
@@ -136,7 +175,8 @@ Why this arrangement: the ESP32 sits in the bottom-left corner so the USB socket
 6. Set `set_fan_mode` to match the number of fan speeds on the remote, comment `dump: all` out again, and install wirelessly.
 7. Solder to the proto PCB: follow *Perfboard layout* above.
 8. Enclosure: drill about 5 mm holes in the wall facing the AC unit for the two LEDs (the board's right-hand edge sits against it), and one about 5 mm hole facing into the room for the receiver on its lead. Cut a slot for the USB cable at the row-1 end and mount the board on stick-on pads or the box's PCB guides.
-9. Give the board a DHCP reservation. Home Assistant finds it by name, but a fixed address makes troubleshooting easier.
+9. Ambient sensor: follow *Adding the SHT40 to the soldered board* above, before closing the box.
+10. Give the board a DHCP reservation. Home Assistant finds it by name, but a fixed address makes troubleshooting easier.
 
 ## First-build things to watch
 
