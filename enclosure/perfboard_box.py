@@ -357,9 +357,16 @@ def export(base: Part, lid: Part, fit_test: Part, lay: Layout, out_dir: Path) ->
 
 def preview(base: Part, lid: Part, reference: list[Part]) -> None:
     try:
-        from ocp_vscode import show
+        from ocp_vscode import get_port, show
     except ImportError:
         print("ocp_vscode not installed: skipping the viewer preview")
+        return
+    # get_port() looks for a live viewer (OCP_PORT, ~/.ocpvscode, then port 3939)
+    # and returns None if it finds none. show() does not check this: it tries
+    # ws://127.0.0.1:None and prints a traceback for each message it sends.
+    if get_port() is None:
+        print("OCP CAD Viewer is not running: skipping the preview "
+              "(open the viewer in VS Code first, or use --no-show)")
         return
     show(base, Pos(0, 0, 15) * lid, *reference,
          names=["base", "lid (lifted)", "board", "esp32", "led2", "led1"],
