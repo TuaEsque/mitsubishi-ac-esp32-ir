@@ -66,7 +66,12 @@ STANDOFF_RIB_W = 3.0        # ties each standoff to its end wall (no thin sliver
 GAP_LEFT = 8.0              # column A side: room for the lid bosses
 LED_PROTRUSION = 12.0       # LEDs stick out past the board's right edge (measured)
 GAP_RIGHT = LED_PROTRUSION + 0.5    # column R side: LED tips stop 0.5 mm short of the wall
-GAP_END = 1.0               # both short ends; keeps the USB socket near the wall
+# Row-1 end: the ESP32 module sticks out past the board edge here (measured on
+# the 21 Nov fit test). Leave a small gap so its USB socket sits just inside the wall.
+ESP32_OVERHANG = 5.0
+ESP32_WALL_GAP = 0.5
+GAP_USB_END = ESP32_OVERHANG + ESP32_WALL_GAP
+GAP_ANT_END = 1.0           # antenna end (rows 17-24)
 
 # Height above the board's top surface.
 TALLEST_ABOVE_BOARD = 16.5  # top of the ESP32 module (measured)
@@ -100,7 +105,7 @@ LED_WINDOW_ABOVE = 8.0      # window top, above the board's top surface
 # the USB slot. It sits over the empty strip columns L-R (rows 17-24) so the lead
 # and its jumper housings stay clear of the ESP32. Press the dome into the hole
 # from inside and fix it with a dab of hot glue.
-TSOP_HOLE_D = 5.5
+TSOP_HOLE_D = 7.0           # 5 mm receiver head; FDM holes print ~0.2 mm small
 TSOP_COL = 15               # column O: middle of the L-R strip
 TSOP_Z_ABOVE_BOARD = 6.0    # hole centre above the board's top surface
 
@@ -151,8 +156,8 @@ class Layout:
 
 def make_layout() -> Layout:
     inner_w = GAP_LEFT + BOARD_W + GAP_RIGHT
-    inner_l = GAP_END + BOARD_L + GAP_END
-    board_x0, board_y0 = -inner_w / 2 + GAP_LEFT, -inner_l / 2 + GAP_END
+    inner_l = GAP_USB_END + BOARD_L + GAP_ANT_END
+    board_x0, board_y0 = -inner_w / 2 + GAP_LEFT, -inner_l / 2 + GAP_USB_END
     board_top_z = FLOOR + STANDOFF_H + BOARD_T
 
     usb_x = board_x0 + (board_hole(1, 1)[0] + board_hole(11, 1)[0]) / 2
@@ -218,6 +223,9 @@ def check_layout(lay: Layout) -> list[str]:
 
     if TALLEST_ABOVE_BOARD + MIN_CLEARANCE > lay.inner_h - (lay.board_top_z - FLOOR):
         errors.append("the ESP32 module comes within 1 mm of the lid")
+    esp_end_gap = (lay.board_y0 - ESP32_OVERHANG) - (-lay.inner_l / 2)
+    if esp_end_gap < ESP32_WALL_GAP - 1e-6:
+        errors.append(f"the ESP32 module is {esp_end_gap:.2f} mm from the USB wall")
 
     tx, tz = lay.tsop
     tsop_r = TSOP_HOLE_D / 2
@@ -304,9 +312,9 @@ def build_reference(lay: Layout) -> list[Part]:
     for x, y in lay.standoffs:
         board -= Pos(x, y, lay.board_top_z - BOARD_T - 1) * _post(MOUNT_HOLE_D, BOARD_T + 2)
 
-    # DOIT DevKit V1: 28 x 51.6 mm, starting 1.7 pitches before row 1 (tools/perfboard.py).
+    # DOIT DevKit V1: 28 x 51.6 mm, its USB end ESP32_OVERHANG past the row-1 edge.
     esp_cx = lay.usb_centre[0]
-    esp_y0 = y0 + board_hole(1, 1)[1] - 1.7 * PITCH
+    esp_y0 = y0 - ESP32_OVERHANG
     esp_z0 = lay.board_top_z + 8.5 + 2.5
     esp32 = Pos(esp_cx, esp_y0 + 51.6 / 2, esp_z0) * Box(
         28.0, 51.6, TALLEST_ABOVE_BOARD - 11.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
