@@ -59,7 +59,7 @@ MOUNT_HOLE_D = 2.0
 # Board standoffs: M2 x 6 self-tapping screws (1.6 mm board + 4.4 mm into plastic).
 STANDOFF_H = 5.0            # clearance under the board for solder joints and pins
 STANDOFF_D = 5.0
-STANDOFF_PILOT_D = 1.7      # M2 self-tapper into PLA
+STANDOFF_PILOT_D = 2.2      # 1.7 was too tight on the 21 Nov fit test; widened by 0.5
 STANDOFF_RIB_W = 3.0        # ties each standoff to its end wall (no thin slivers)
 
 # Gaps between board edges and inside walls.

@@ -6,7 +6,7 @@ Outside it measures 74.5 × 76 × 30.6 mm (inside 70.5 × 72 × 26.6 mm). There 
 
 | Feature | Where | Notes |
 | --- | --- | --- |
-| Board standoffs | Under the corner mounting holes | 5 mm tall (room for the solder joints), Ø1.7 mm pilots for **M2 × 6 self-tapping** screws, each tied to the end wall with a rib |
+| Board standoffs | Under the corner mounting holes | 5 mm tall (room for the solder joints), Ø2.2 mm pilots (widened from 1.7 mm after the first fit test) for **M2 × 6 self-tapping** screws, each tied to the end wall with a rib |
 | Lid bosses | Inside corners | Ø2.5 mm pilots for **M3 × 8 self-tapping** screws; Ø3.4 mm holes in the lid |
 | USB slot | Row-1 wall, centred on the ESP32 | 15 × 8 mm, big enough for a micro-USB or USB-C plug's overmould |
 | IR LED window | Column-R wall (faces the AC) | 21 × 11 mm, spans both LEDs with room for their ~10° splay. The wall is 12.5 mm from the board edge for the 12 mm LEDs |
