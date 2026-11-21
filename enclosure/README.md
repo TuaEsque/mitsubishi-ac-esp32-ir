@@ -2,15 +2,15 @@
 
 A 3D-printable box for the perfboard (5 × 7 cm, uncut), modelled in [build123d](https://github.com/gumyr/build123d) in `perfboard_box.py`. The board screws onto four standoffs under its corner mounting holes, and the lid screws onto four corner bosses.
 
-Outside it measures 72.5 × 76 × 30.6 mm (inside 68.5 × 72 × 26.6 mm).
+Outside it measures 74.5 × 76 × 30.6 mm (inside 70.5 × 72 × 26.6 mm). There is 20 mm from the board's top surface to the lid, over the 16.5 mm ESP32 module.
 
 | Feature | Where | Notes |
 | --- | --- | --- |
 | Board standoffs | Under the corner mounting holes | 5 mm tall (room for the solder joints), Ø1.7 mm pilots for **M2 × 6 self-tapping** screws, each tied to the end wall with a rib |
 | Lid bosses | Inside corners | Ø2.5 mm pilots for **M3 × 8 self-tapping** screws; Ø3.4 mm holes in the lid |
-| USB slot | Row-1 wall, centred on the ESP32 | 13 × 8 mm, big enough for a micro-USB or USB-C plug's overmould |
-| IR LED window | Column-R wall (faces the AC) | 21 × 11 mm, spans both LEDs with room for their ~10° splay |
-| Receiver hole | Lid, over the LED-side gap near the antenna end | Ø5.5 mm. Push the TSOP38238's dome into it from inside and fix it with a dab of hot glue |
+| USB slot | Row-1 wall, centred on the ESP32 | 15 × 8 mm, big enough for a micro-USB or USB-C plug's overmould |
+| IR LED window | Column-R wall (faces the AC) | 21 × 11 mm, spans both LEDs with room for their ~10° splay. The wall is 12.5 mm from the board edge for the 12 mm LEDs |
+| Receiver hole | Antenna-end wall, opposite the USB slot | Ø5.5 mm, 6 mm above the board, over the empty strip columns (column O) so the lead stays clear of the ESP32. Push the TSOP38238's dome into it from inside and fix it with a dab of hot glue |
 
 ## Build it
 
@@ -26,12 +26,10 @@ The script works out every position as numbers first, then `check_layout()` chec
 
 ## Measure before the full print
 
-The board grid (columns, rows, LED holes, ESP32 sockets) comes from `tools/perfboard.py`. The values marked `MEASURE` in the script are estimates:
+The board grid (columns, rows, LED holes, ESP32 sockets) comes from `tools/perfboard.py`. The LED protrusion (12 mm) and the ESP32 module height (16.5 mm) are measured. The values still marked `MEASURE` in the script are estimates:
 
 1. **Mounting holes**: `MOUNT_PITCH_W` × `MOUNT_PITCH_L` = 46.4 × 66.0 mm centre to centre, Ø2.0 mm. This is Adafruit's spec for this board style. With calipers, measure edge to edge across two holes and subtract one hole diameter.
-2. **`GAP_RIGHT`** (10.5 mm): how far the LEDs stick out past the board's right edge, plus about 0.5 mm.
-3. **`USB_Z_ABOVE_BOARD`** (14 mm): from the board's top surface to the middle of the USB socket.
-4. **`TALLEST_ABOVE_BOARD`** (16.5 mm): from the board's top surface to the top of the ESP32 module.
+2. **`USB_Z_ABOVE_BOARD`** (14 mm): from the board's top surface to the middle of the USB socket.
 
 Then print `fit_test.stl` (the floor, the standoffs and the bottom 1.5 mm of the walls) and screw the board down. If the holes line up and the board drops in, print the base and lid.
 

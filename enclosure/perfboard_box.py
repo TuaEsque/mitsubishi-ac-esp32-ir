@@ -64,12 +64,13 @@ STANDOFF_RIB_W = 3.0        # ties each standoff to its end wall (no thin sliver
 
 # Gaps between board edges and inside walls.
 GAP_LEFT = 8.0              # column A side: room for the lid bosses
-GAP_RIGHT = 10.5            # column R side: LEDs stick out about 10 mm. MEASURE
+LED_PROTRUSION = 12.0       # LEDs stick out past the board's right edge (measured)
+GAP_RIGHT = LED_PROTRUSION + 0.5    # column R side: LED tips stop 0.5 mm short of the wall
 GAP_END = 1.0               # both short ends; keeps the USB socket near the wall
 
-# Components above the board's top surface. MEASURE both.
-TALLEST_ABOVE_BOARD = 16.5  # sockets 8.5 + header spacer 2.5 + ESP32 PCB 1.6 + module
-TOP_CLEARANCE = 3.0
+# Height above the board's top surface.
+TALLEST_ABOVE_BOARD = 16.5  # top of the ESP32 module (measured)
+CLEARANCE_ABOVE_BOARD = 20.0  # board top to lid underside, at least
 
 # Shell.
 WALL = 2.0
@@ -85,7 +86,7 @@ LID_HOLE_D = 3.4
 BOSS_OVERLAP = 0.5          # bosses sink into the walls; exact tangency breaks the STL
 
 # USB slot in the row-1 wall, centred on the ESP32 (midway between columns A and K).
-USB_SLOT_W, USB_SLOT_H = 13.0, 8.0
+USB_SLOT_W, USB_SLOT_H = 15.0, 8.0
 USB_Z_ABOVE_BOARD = 14.0    # connector centre above the board's top surface. MEASURE
 
 # IR LED window in the column-R wall, spanning both LEDs (rows 7-8 and 10-11).
@@ -95,10 +96,13 @@ LED_WINDOW_MARGIN = 3.0     # each end, for the ~10 degree splay between the LED
 LED_WINDOW_BELOW = 3.0      # window bottom, below the board's top surface
 LED_WINDOW_ABOVE = 8.0      # window top, above the board's top surface
 
-# Receiver (TSOP38238 on its flying lead): hole in the lid, over the LED-side gap
-# near the antenna end. Press the dome into it and fix with a dab of hot glue.
+# Receiver (TSOP38238 on its flying lead): hole in the antenna-end wall, opposite
+# the USB slot. It sits over the empty strip columns L-R (rows 17-24) so the lead
+# and its jumper housings stay clear of the ESP32. Press the dome into the hole
+# from inside and fix it with a dab of hot glue.
 TSOP_HOLE_D = 5.5
-TSOP_FROM_ANTENNA_WALL = 15.0
+TSOP_COL = 15               # column O: middle of the L-R strip
+TSOP_Z_ABOVE_BOARD = 6.0    # hole centre above the board's top surface
 
 MIN_CLEARANCE = 1.0         # smallest gap allowed between separate features
 
@@ -130,7 +134,7 @@ class Layout:
     lid_bosses: tuple[tuple[float, float], ...]
     usb_centre: tuple[float, float]         # (x, z)
     led_window: tuple[float, float, float, float]   # (y centre, width, z bottom, z top)
-    tsop: tuple[float, float]
+    tsop: tuple[float, float]               # (x, z) on the antenna-end wall
 
     @property
     def outer_w(self) -> float:
@@ -155,7 +159,7 @@ def make_layout() -> Layout:
     usb_z = board_top_z + USB_Z_ABOVE_BOARD
     # Lid height: clear the tallest part, and leave at least one wall's worth of
     # plastic above the USB slot so the slot is not an open notch.
-    inner_top_z = max(board_top_z + TALLEST_ABOVE_BOARD + TOP_CLEARANCE,
+    inner_top_z = max(board_top_z + CLEARANCE_ABOVE_BOARD,
                       usb_z + USB_SLOT_H / 2 + WALL)
 
     mx, my = (BOARD_W - MOUNT_PITCH_W) / 2, (BOARD_L - MOUNT_PITCH_L) / 2
@@ -172,7 +176,7 @@ def make_layout() -> Layout:
                   board_top_z - LED_WINDOW_BELOW,
                   board_top_z + LED_WINDOW_ABOVE)
 
-    tsop = (board_x0 + BOARD_W + GAP_RIGHT / 2, inner_l / 2 - TSOP_FROM_ANTENNA_WALL)
+    tsop = (board_x0 + board_hole(TSOP_COL, ROWS)[0], board_top_z + TSOP_Z_ABOVE_BOARD)
 
     return Layout(inner_w, inner_l, inner_top_z - FLOOR, board_x0, board_y0, board_top_z,
                   standoffs, lid_bosses, (usb_x, usb_z), led_window, tsop)
@@ -212,10 +216,20 @@ def check_layout(lay: Layout) -> list[str]:
     if win_w / 2 > lay.inner_l / 2 - LID_BOSS_D - MIN_CLEARANCE:
         errors.append("LED window reaches the corner bosses")
 
-    tx, ty = lay.tsop
-    for b in lay.lid_bosses:
-        if math.dist((tx, ty), b) < boss_r + TSOP_HOLE_D / 2 + MIN_CLEARANCE:
-            errors.append(f"receiver hole clashes with lid boss {b}")
+    if TALLEST_ABOVE_BOARD + MIN_CLEARANCE > lay.inner_h - (lay.board_top_z - FLOOR):
+        errors.append("the ESP32 module comes within 1 mm of the lid")
+
+    tx, tz = lay.tsop
+    tsop_r = TSOP_HOLE_D / 2
+    if abs(tx) + tsop_r > lay.inner_w / 2 - LID_BOSS_D - MIN_CLEARANCE:
+        errors.append("receiver hole reaches the corner bosses")
+    if tz - tsop_r < lay.board_top_z + MIN_CLEARANCE:
+        errors.append("receiver hole runs down to the board")
+    if tz + tsop_r > FLOOR + lay.inner_h - WALL:
+        errors.append("less than one wall thickness above the receiver hole")
+    esp_half_w = 28.0 / 2
+    if abs(tx - lay.usb_centre[0]) < esp_half_w + tsop_r:
+        errors.append("receiver hole is in line with the ESP32; its lead would hit the board")
     return errors
 
 
@@ -259,6 +273,10 @@ def build_base(lay: Layout) -> Part:
     win_y, win_w, win_bottom, win_top = lay.led_window
     base -= Pos(lay.inner_w / 2 + WALL / 2, win_y, (win_bottom + win_top) / 2) * Box(
         through, win_w, win_top - win_bottom)
+
+    tx, tz = lay.tsop
+    base -= Pos(tx, lay.inner_l / 2 + WALL / 2, tz) * Cylinder(
+        TSOP_HOLE_D / 2, through, rotation=(90, 0, 0))
     return base
 
 
@@ -268,8 +286,6 @@ def build_lid(lay: Layout) -> Part:
     lid = Pos(0, 0, z0) * _rounded_slab(lay.outer_w, lay.outer_l, CORNER_R, LID_T)
     for x, y in lay.lid_bosses:
         lid -= Pos(x, y, z0 - 1) * _post(LID_HOLE_D, LID_T + 2)
-    tx, ty = lay.tsop
-    lid -= Pos(tx, ty, z0 - 1) * _post(TSOP_HOLE_D, LID_T + 2)
     return lid
 
 
@@ -296,11 +312,12 @@ def build_reference(lay: Layout) -> list[Part]:
         28.0, 51.6, TALLEST_ABOVE_BOARD - 11.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
 
     leds = []
-    edge_x = x0 + BOARD_W
+    led_len = 8.6                       # 5 mm LED body, flange to tip
+    tip_x = x0 + BOARD_W + LED_PROTRUSION
     for rows in (LED_ROWS[:2], LED_ROWS[2:]):
         y = y0 + sum(board_hole(COLS, r)[1] for r in rows) / 2
-        leds.append(Pos(edge_x + 4.5, y, lay.board_top_z + LED_D / 2) * Cylinder(
-            LED_D / 2, 8.6, rotation=(0, 90, 0)))
+        leds.append(Pos(tip_x - led_len / 2, y, lay.board_top_z + LED_D / 2) * Cylinder(
+            LED_D / 2, led_len, rotation=(0, 90, 0)))
     return [board, esp32, *leds]
 
 
